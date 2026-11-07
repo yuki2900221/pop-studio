@@ -1,5 +1,5 @@
-export const SALE_FONT_FAMILY = "Reggae One";
-export const SALE_FONT_URL = "/fonts/reggae-one.woff2";
+export const SALE_FONT_FAMILY = "Mochiy Pop One";
+export const SALE_FONT_URL = "/fonts/mochiy-pop-one.woff2";
 
 /** Shared by on-screen SVG, printed SVG, and standalone PNG export. */
 export function saleFontCss(source = SALE_FONT_URL): string {

@@ -26,7 +26,12 @@ export default function SaleArtwork({
   const names = split
     ? [chars.slice(0, split).join(""), chars.slice(split).join("")]
     : [name];
-  const nameSize = (names.length === 2 ? 145 : 300) * doc.fontScale;
+  const hasDescenders = /[gjpqy_]/.test(name);
+  const requestedNameSize = (names.length === 2 ? 130 : 275) * doc.fontScale;
+  // Keep Latin descenders inside the heading area, above the blue memo.
+  const nameSize = hasDescenders
+    ? Math.min(requestedNameSize, names.length === 2 ? 132 : 275)
+    : requestedNameSize;
   const price = formatPrice(amount);
   const tax = formatPrice(taxIncluded(doc.price, doc.taxRate, doc.taxRounding));
   const fit = (text: string, max: number, size: number) =>
@@ -43,6 +48,7 @@ export default function SaleArtwork({
       aria-label={`${doc.origin} ${doc.productName} ${price}円の特売POP`}
       fontFamily={`'${SALE_FONT_FAMILY}', sans-serif`}
       fontWeight="400"
+      strokeLinejoin="round"
     >
       <defs>
         <style data-pop-font="sale">{saleFontCss()}</style>
@@ -71,11 +77,11 @@ export default function SaleArtwork({
           <text
             key={i}
             x="766"
-            y={names.length === 2 ? 157 + i * 152 : 316}
+            y={names.length === 2 ? 145 + i * 156 : hasDescenders ? 258 : 300}
             textAnchor="middle"
             fill="#000"
             stroke="#000"
-            strokeWidth="6"
+            strokeWidth="2"
             paintOrder="stroke fill"
             fontSize={nameSize}
             textLength={fit(line, 832, nameSize)}
@@ -151,15 +157,15 @@ export default function SaleArtwork({
         <g
           fill="#000"
           stroke="#000"
-          strokeWidth="12"
+          strokeWidth="4"
           paintOrder="stroke fill"
           transform="translate(8 9)"
           aria-hidden="true"
         >
           <text
             x="456"
-            y="708"
-            fontSize="337"
+            y="690"
+            fontSize="300"
             textLength="617"
             lengthAdjust="spacingAndGlyphs"
           >
@@ -167,7 +173,7 @@ export default function SaleArtwork({
           </text>
           <text
             x="1088"
-            y="708"
+            y="690"
             fontSize="139"
             textLength="94"
             lengthAdjust="spacingAndGlyphs"
@@ -177,12 +183,12 @@ export default function SaleArtwork({
         </g>
         <text
           x="456"
-          y="708"
+          y="690"
           fill={red}
           stroke={red}
-          strokeWidth="12"
+          strokeWidth="4"
           paintOrder="stroke fill"
-          fontSize="337"
+          fontSize="300"
           textLength="617"
           lengthAdjust="spacingAndGlyphs"
         >
@@ -190,10 +196,10 @@ export default function SaleArtwork({
         </text>
         <text
           x="1088"
-          y="708"
+          y="690"
           fill={red}
           stroke={red}
-          strokeWidth="7"
+          strokeWidth="3"
           paintOrder="stroke fill"
           fontSize="139"
           textLength="94"
@@ -203,7 +209,7 @@ export default function SaleArtwork({
         </text>
         {doc.showTax && (
           <g fill="#000">
-            <text x="246" y="812" fontSize="119">
+            <text x="246" y="812" fontSize="90">
               (
             </text>
             <text
@@ -229,7 +235,7 @@ export default function SaleArtwork({
             <text x="1045" y="811" fontSize="65">
               円
             </text>
-            <text x="1144" y="812" fontSize="119">
+            <text x="1144" y="812" fontSize="90">
               )
             </text>
           </g>

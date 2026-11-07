@@ -4,7 +4,7 @@
 
 利用者の参考画像をもとに、白地、傾けた赤黒の見出し、上部の商品名、左の産地・容量・メモ2、青のメモ1、赤い税抜価格、下部の税込価格を共有SVGで構成しました。各項目を文字として編集できます。
 
-書体はFONTDASUの[Mochiy Pop One（公式配布）](https://github.com/google/fonts/tree/main/ofl/mochiypopone)をSIL Open Font License 1.1で同梱しています。専用商用書体は配布権を確認できないため使用しません。自己配信したWOFF2をPNGのSVG内にも埋め込み、印刷はFontFaceSetで書体の読み込み完了を確認します。
+日本語にはFONTDASUの[Mochiy Pop One（公式配布）](https://github.com/google/fonts/tree/main/ofl/mochiypopone)、金額の数字には[Archivo Black（公式配布）](https://github.com/google/fonts/tree/main/ofl/archivoblack)をSIL Open Font License 1.1で同梱しています。数字を横に引き伸ばさず、フォントの字幅で配置し、桁数が多い場合は縮小します。自己配信した両WOFF2をPNGのSVG内にも埋め込み、印刷はFontFaceSetで両書体の読み込み完了を確認します。
 
 `memo1`と`memo2`は各40文字の省略可能な文書項目です。従来の保存データとの互換性を維持し、JSON読み込みでも型・長さ・制御文字を検証します。店舗書式の操作画面はA4横・A5横を対象とします。
 

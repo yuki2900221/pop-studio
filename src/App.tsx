@@ -57,7 +57,11 @@ import {
   type Template,
 } from "./lib/model";
 import { printDocument } from "./lib/print";
-import { SALE_FONT_URL, saleFontCss } from "./lib/artwork-fonts";
+import {
+  SALE_FONT_URL,
+  PRICE_FONT_URL,
+  saleFontCss,
+} from "./lib/artwork-fonts";
 
 type View = "templates" | "saved" | "editor";
 type Modal =
@@ -491,18 +495,22 @@ export default function App() {
       const svg = original.cloneNode(true) as SVGSVGElement;
       svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
       if (doc.theme === "sale") {
-        const response = await fetch(SALE_FONT_URL);
-        if (!response.ok) throw Error("POP書体を読み込めませんでした");
-        const fontBlob = await response.blob();
-        const fontSource = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = reject;
-          reader.readAsDataURL(fontBlob);
-        });
+        const fontSources = await Promise.all(
+          [SALE_FONT_URL, PRICE_FONT_URL].map(async (url) => {
+            const response = await fetch(url);
+            if (!response.ok) throw Error("POP書体を読み込めませんでした");
+            const fontBlob = await response.blob();
+            return new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result));
+              reader.onerror = reject;
+              reader.readAsDataURL(fontBlob);
+            });
+          }),
+        );
         const fontStyle = svg.querySelector("style[data-pop-font]");
         if (!fontStyle) throw Error("POP書体がありません");
-        fontStyle.textContent = saleFontCss(fontSource);
+        fontStyle.textContent = saleFontCss(fontSources[0], fontSources[1]);
       }
       const imageNode = svg.querySelector("image");
       if (imageNode && doc.image?.startsWith("/images/")) {

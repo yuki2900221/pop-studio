@@ -1,6 +1,22 @@
 import type { PopDocument } from "../lib/model";
 import { formatPrice, taxIncluded } from "../lib/model";
-import { SALE_FONT_FAMILY, saleFontCss } from "../lib/artwork-fonts";
+import {
+  SALE_FONT_FAMILY,
+  PRICE_FONT_FAMILY,
+  saleFontCss,
+} from "../lib/artwork-fonts";
+
+// Advance widths of the bundled Archivo Black font (1000 units/em).
+function numeralWidth(text: string, size: number) {
+  return (
+    (Array.from(text).reduce(
+      (sum, char) => sum + (char === "," ? 333 : 667),
+      0,
+    ) /
+      1000) *
+    size
+  );
+}
 
 /** Store reference: one SVG is shared by preview, PNG and physical print. */
 export default function SaleArtwork({
@@ -34,6 +50,14 @@ export default function SaleArtwork({
     : requestedNameSize;
   const price = formatPrice(amount);
   const tax = formatPrice(taxIncluded(doc.price, doc.taxRate, doc.taxRounding));
+  const priceSize = Math.min(320, 617 / numeralWidth(price, 1));
+  const priceWidth = numeralWidth(price, priceSize);
+  const priceX = 824 - (priceWidth + 18 + 94) / 2;
+  const priceYenX = priceX + priceWidth + 18;
+  const taxSize = Math.min(98, 446 / numeralWidth(tax, 1));
+  const taxWidth = numeralWidth(tax, taxSize);
+  const taxX = 856 - (taxWidth + 16 + 65) / 2;
+  const taxYenX = taxX + taxWidth + 16;
   const fit = (text: string, max: number, size: number) =>
     Math.min(max, Math.max(size, text.length * size * 0.96));
   const labelSize = (text: string, base: number, normal: number) =>
@@ -154,26 +178,18 @@ export default function SaleArtwork({
         >
           本体価格
         </text>
-        <g
-          fill="#000"
-          stroke="#000"
-          strokeWidth="4"
-          paintOrder="stroke fill"
-          transform="translate(8 9)"
-          aria-hidden="true"
-        >
+        <g fill="#000" transform="translate(8 9)" aria-hidden="true">
           <text
-            x="456"
-            y="690"
-            fontSize="300"
-            textLength="617"
-            lengthAdjust="spacingAndGlyphs"
+            x={priceX}
+            y="684"
+            fontFamily={PRICE_FONT_FAMILY}
+            fontSize={priceSize}
           >
             {price}
           </text>
           <text
-            x="1088"
-            y="690"
+            x={priceYenX}
+            y="684"
             fontSize="139"
             textLength="94"
             lengthAdjust="spacingAndGlyphs"
@@ -182,25 +198,18 @@ export default function SaleArtwork({
           </text>
         </g>
         <text
-          x="456"
-          y="690"
+          x={priceX}
+          y="684"
           fill={red}
-          stroke={red}
-          strokeWidth="4"
-          paintOrder="stroke fill"
-          fontSize="300"
-          textLength="617"
-          lengthAdjust="spacingAndGlyphs"
+          fontFamily={PRICE_FONT_FAMILY}
+          fontSize={priceSize}
         >
           {price}
         </text>
         <text
-          x="1088"
-          y="690"
+          x={priceYenX}
+          y="684"
           fill={red}
-          stroke={red}
-          strokeWidth="3"
-          paintOrder="stroke fill"
           fontSize="139"
           textLength="94"
           lengthAdjust="spacingAndGlyphs"
@@ -209,12 +218,12 @@ export default function SaleArtwork({
         </text>
         {doc.showTax && (
           <g fill="#000">
-            <text x="246" y="812" fontSize="90">
+            <text x="246" y="816" fontSize="90">
               (
             </text>
             <text
               x="355"
-              y="811"
+              y="815"
               fontSize="58"
               textLength="202"
               lengthAdjust="spacingAndGlyphs"
@@ -222,20 +231,17 @@ export default function SaleArtwork({
               税込価格
             </text>
             <text
-              x="593"
-              y="811"
-              fontSize="98"
-              stroke="#000"
-              strokeWidth="3"
-              textLength="429"
-              lengthAdjust="spacingAndGlyphs"
+              x={taxX}
+              y="815"
+              fontFamily={PRICE_FONT_FAMILY}
+              fontSize={taxSize}
             >
               {tax}
             </text>
-            <text x="1045" y="811" fontSize="65">
+            <text x={taxYenX} y="815" fontSize="65">
               円
             </text>
-            <text x="1144" y="812" fontSize="90">
+            <text x="1144" y="816" fontSize="90">
               )
             </text>
           </g>

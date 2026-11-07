@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDocument, templates } from "../src/lib/model";
 import { printDocument } from "../src/lib/print";
-import { SALE_FONT_FAMILY } from "../src/lib/artwork-fonts";
+import { SALE_FONT_FAMILY, PRICE_FONT_FAMILY } from "../src/lib/artwork-fonts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -9,9 +9,9 @@ afterEach(() => {
 });
 
 describe("store POP print font readiness", () => {
-  function popupWithFonts(fonts: unknown[]) {
+  function popupWithFonts(fonts: (font: string) => Promise<unknown[]>) {
     const status = { textContent: "" };
-    const load = vi.fn().mockResolvedValue(fonts);
+    const load = vi.fn(fonts);
     const popup = {
       closed: false,
       opener: {},
@@ -32,18 +32,52 @@ describe("store POP print font readiness", () => {
 
   it("does not open native printing if the store font did not load", async () => {
     vi.useFakeTimers();
-    const { popup, status, load } = popupWithFonts([]);
+    const { popup, status, load } = popupWithFonts(async () => []);
     const doc = createDocument(templates.find((t) => t.theme === "sale")!);
     expect(printDocument(doc).ok).toBe(true);
     await vi.runAllTimersAsync();
     expect(load).toHaveBeenCalledWith(`400 32px "${SALE_FONT_FAMILY}"`);
+    expect(load).toHaveBeenCalledWith(`400 32px "${PRICE_FONT_FAMILY}"`);
     expect(popup.print).not.toHaveBeenCalled();
     expect(status.textContent).toContain("書体または商品画像");
   });
 
-  it("prints only after the POP font is ready and ignores an unused carried image", async () => {
+  it("blocks printing if only the numeric font is missing", async () => {
     vi.useFakeTimers();
-    const { popup, status } = popupWithFonts([{ family: SALE_FONT_FAMILY }]);
+    const { popup, status } = popupWithFonts(async (font) =>
+      font.includes(PRICE_FONT_FAMILY) ? [] : [{ family: SALE_FONT_FAMILY }],
+    );
+    const doc = createDocument(templates.find((t) => t.theme === "sale")!);
+    expect(printDocument(doc).ok).toBe(true);
+    await vi.runAllTimersAsync();
+    expect(popup.print).not.toHaveBeenCalled();
+    expect(status.textContent).toContain("書体または商品画像");
+  });
+
+  it("handles a rejected numeric font request without printing a fallback", async () => {
+    vi.useFakeTimers();
+    const { popup, status } = popupWithFonts(async (font) => {
+      if (font.includes(PRICE_FONT_FAMILY)) throw new Error("network");
+      return [{ family: SALE_FONT_FAMILY }];
+    });
+    const doc = createDocument(templates.find((t) => t.theme === "sale")!);
+    expect(printDocument(doc).ok).toBe(true);
+    await vi.runAllTimersAsync();
+    expect(popup.print).not.toHaveBeenCalled();
+    expect(status.textContent).toContain("書体または商品画像");
+  });
+
+  it("waits for the numeric font before printing and ignores an unused carried image", async () => {
+    vi.useFakeTimers();
+    let finishNumeric!: (fonts: unknown[]) => void;
+    const numericReady = new Promise<unknown[]>((resolve) => {
+      finishNumeric = resolve;
+    });
+    const { popup, status } = popupWithFonts(async (font) =>
+      font.includes(PRICE_FONT_FAMILY)
+        ? numericReady
+        : [{ family: SALE_FONT_FAMILY }],
+    );
     vi.stubGlobal(
       "Image",
       class {
@@ -57,6 +91,9 @@ describe("store POP print font readiness", () => {
       image: "/images/oranges.svg",
     };
     expect(printDocument(doc).ok).toBe(true);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(popup.print).not.toHaveBeenCalled();
+    finishNumeric([{ family: PRICE_FONT_FAMILY }]);
     await vi.runAllTimersAsync();
     expect(popup.focus).toHaveBeenCalledOnce();
     expect(popup.print).toHaveBeenCalledOnce();

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import PopArtwork from "../components/PopArtwork";
 import { validateDocument, type PopDocument } from "./model";
-import { SALE_FONT_FAMILY } from "./artwork-fonts";
+import { SALE_FONT_FAMILY, PRICE_FONT_FAMILY } from "./artwork-fonts";
 
 export function escapeHtml(value: unknown): string {
   return String(value).replace(
@@ -107,11 +107,13 @@ export function printDocument(
     const status = popup.document.getElementById("print-status");
     try {
       if (doc.theme === "sale") {
-        // An unloaded POP font would change line widths and the store's layout.
-        const loaded = await popup.document.fonts.load(
-          `400 32px "${SALE_FONT_FAMILY}"`,
+        // Both faces must be available before creating the physical price output.
+        const loaded = await Promise.all(
+          [SALE_FONT_FAMILY, PRICE_FONT_FAMILY].map((family) =>
+            popup.document.fonts.load(`400 32px "${family}"`),
+          ),
         );
-        if (!loaded.length) throw new Error("font");
+        if (loaded.some((faces) => !faces.length)) throw new Error("font");
       } else if (doc.image) {
         // SVG <image> is absent from document.images. Decode it explicitly.
         await preloadImage(doc.image);

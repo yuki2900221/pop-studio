@@ -37,6 +37,27 @@ describe("price and consumption tax", () => {
 });
 
 describe("document boundaries", () => {
+  it("provides the store sale format without changing older saved documents", () => {
+    const template = templates[0];
+    expect(template.id).toBe("store-sale");
+    const sale = createDocument(template);
+    expect(sale).toMatchObject({
+      theme: "sale",
+      badge: "お買得品",
+      memo1: "メモ1",
+      memo2: "メモ2",
+      image: null,
+      paper: "A4",
+      orientation: "landscape",
+    });
+    const oldDocument = { ...createDocument(templates[1]) };
+    delete oldDocument.memo1;
+    delete oldDocument.memo2;
+    expect(validateDocument(oldDocument)).toBe(true);
+    expect(
+      loadDocuments({ getItem: () => JSON.stringify([oldDocument]) }),
+    ).toEqual([oldDocument]);
+  });
   it("creates a valid independent document from each provided template", () => {
     for (const template of templates)
       expect(validateDocument(createDocument(template))).toBe(true);
@@ -64,6 +85,14 @@ describe("document boundaries", () => {
     { name: "" },
     { showTax: "true" },
     { paper: "A0" },
+    { theme: "sale-with-script" },
+    { memo1: 123 },
+    { memo2: null },
+    { memo1: "a".repeat(41) },
+    { memo2: "a".repeat(41) },
+    { memo1: "メモ\n改行" },
+    { memo2: "メモ\tタブ" },
+    { memo1: "メモ\u007f" },
   ])("rejects invalid imported data %j", (patch) => {
     expect(validateDocument({ ...createDocument(), ...patch })).toBe(false);
   });
@@ -82,6 +111,8 @@ describe("document boundaries", () => {
         unit: "a".repeat(30),
         badge: "a".repeat(16),
         fontScale: 1.2,
+        memo1: "あ".repeat(40),
+        memo2: "い".repeat(40),
       }),
     ).toBe(true);
   });
@@ -98,6 +129,26 @@ describe("document boundaries", () => {
 });
 
 describe("device persistence", () => {
+  it("round trips both store memo fields without mixing separate documents", () => {
+    let saved = "";
+    const storage = {
+      getItem: () => saved,
+      setItem: (_key: string, value: string) => {
+        saved = value;
+      },
+    };
+    const first = {
+      ...createDocument(),
+      memo1: "お一人様2点",
+      memo2: "数量限定",
+    };
+    const second = { ...createDocument(), memo1: "", memo2: "別の商品" };
+    expect(saveDocuments(storage, [first, second])).toEqual({ ok: true });
+    const documents = loadDocuments(storage);
+    expect(documents).toEqual([first, second]);
+    expect(documents[0].memo2).toBe("数量限定");
+    expect(documents[1].memo2).toBe("別の商品");
+  });
   it("round trips validated documents under a namespaced key", () => {
     const memory = new Map<string, string>();
     const storage = {
@@ -161,6 +212,20 @@ describe("device persistence", () => {
 });
 
 describe("physical printing and HTML isolation", () => {
+  it("escapes both memo fields in the store sale print artwork", () => {
+    const doc = {
+      ...createDocument(
+        templates.find((template) => template.id === "store-sale")!,
+      ),
+      memo1: "<img src=x onerror=alert(1)>",
+      memo2: "別の商品<&",
+    };
+    expect(validateDocument(doc)).toBe(true);
+    const html = buildPrintHtml(doc);
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+    expect(html).toContain("別の商品&lt;&amp;");
+  });
   it("uses actual paper dimensions for both orientations", () => {
     expect(paperDimensions({ paper: "A4", orientation: "landscape" })).toEqual({
       width: 297,
@@ -195,10 +260,13 @@ describe("physical printing and HTML isolation", () => {
     expect(html).toContain("429");
   });
   it("omits tax text when disabled", () => {
-    expect(
-      buildPrintHtml({ ...createDocument(), showTax: false }),
-    ).not.toContain("税込 ");
-    expect(buildPrintHtml(createDocument())).toContain("税込 429円");
+    const standard = createDocument(
+      templates.find((template) => template.id === "citrus-market")!,
+    );
+    expect(buildPrintHtml({ ...standard, showTax: false })).not.toContain(
+      "税込 ",
+    );
+    expect(buildPrintHtml(standard)).toContain("税込 429円");
   });
   it("prints the same SVG used by the preview for every template, paper size and orientation", () => {
     for (const template of templates) {

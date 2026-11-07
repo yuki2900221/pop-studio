@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import PopArtwork from "../components/PopArtwork";
 import { validateDocument, type PopDocument } from "./model";
+import { SALE_FONT_FAMILY } from "./artwork-fonts";
 
 export function escapeHtml(value: unknown): string {
   return String(value).replace(
@@ -105,8 +106,16 @@ export function printDocument(
     preparing = true;
     const status = popup.document.getElementById("print-status");
     try {
-      // SVG <image> is absent from document.images. Decode its source explicitly.
-      if (doc.image) await preloadImage(doc.image);
+      if (doc.theme === "sale") {
+        // An unloaded POP font would change line widths and the store's layout.
+        const loaded = await popup.document.fonts.load(
+          `400 32px "${SALE_FONT_FAMILY}"`,
+        );
+        if (!loaded.length) throw new Error("font");
+      } else if (doc.image) {
+        // SVG <image> is absent from document.images. Decode it explicitly.
+        await preloadImage(doc.image);
+      }
       await popup.document.fonts.ready;
       if (!popup.closed) {
         popup.focus();
@@ -115,7 +124,7 @@ export function printDocument(
     } catch {
       if (status && !popup.closed)
         status.textContent =
-          "商品画像を読み込めませんでした。画像を確認して再度お試しください。";
+          "書体または商品画像を読み込めませんでした。接続と画像を確認して再度お試しください。";
     } finally {
       preparing = false;
     }

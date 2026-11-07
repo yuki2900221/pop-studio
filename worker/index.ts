@@ -1,5 +1,5 @@
 /** Cloudflare Worker: static application + explicitly requested product extraction. */
-export const AI_MODEL = "@cf/google/gemma-4-26b-a4b-it";
+import { AI_MODEL } from "./ai-config";
 const MAX_BODY_BYTES = 8192;
 const AI_TIMEOUT_MS = 20_000;
 

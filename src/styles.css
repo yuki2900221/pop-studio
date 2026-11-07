@@ -2873,3 +2873,10 @@ p {
 .sidebar {
   background: linear-gradient(155deg, #ffffffeb, #f7faf7aa);
 }
+.card-artwork.sale {
+  background: #ececea;
+}
+.sale-format-note {
+  line-height: 1.8;
+  margin: -4px 0 18px;
+}

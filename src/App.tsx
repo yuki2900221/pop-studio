@@ -57,6 +57,7 @@ import {
   type Template,
 } from "./lib/model";
 import { printDocument } from "./lib/print";
+import { SALE_FONT_URL, saleFontCss } from "./lib/artwork-fonts";
 
 type View = "templates" | "saved" | "editor";
 type Modal =
@@ -355,7 +356,7 @@ export default function App() {
   }, [dirty]);
   const start = (t: Template) => {
     const next = createDocument(t);
-    next.paper = size;
+    next.paper = t.theme === "sale" && size === "shelf" ? "A4" : size;
     setDoc(next);
     setHistory([]);
     setFuture([]);
@@ -489,6 +490,20 @@ export default function App() {
     try {
       const svg = original.cloneNode(true) as SVGSVGElement;
       svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      if (doc.theme === "sale") {
+        const response = await fetch(SALE_FONT_URL);
+        if (!response.ok) throw Error("POP書体を読み込めませんでした");
+        const fontBlob = await response.blob();
+        const fontSource = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = reject;
+          reader.readAsDataURL(fontBlob);
+        });
+        const fontStyle = svg.querySelector("style[data-pop-font]");
+        if (!fontStyle) throw Error("POP書体がありません");
+        fontStyle.textContent = saleFontCss(fontSource);
+      }
       const imageNode = svg.querySelector("image");
       if (imageNode && doc.image?.startsWith("/images/")) {
         const blob = await (await fetch(doc.image)).blob();
@@ -875,14 +890,28 @@ export default function App() {
                       <div className={`card-artwork ${t.theme}`}>
                         <div className="poster-shadow">
                           <PopArtwork
-                            doc={{ ...createDocument(t), paper: size }}
+                            doc={{
+                              ...createDocument(t),
+                              paper:
+                                t.theme === "sale" && size === "shelf"
+                                  ? "A4"
+                                  : size,
+                            }}
                           />
                         </div>
                         <span className="template-hover-action">
                           <Plus size={16} />
                           このデザインを使う
                         </span>
-                        <span className="paper-tag">{paperLabels[size]}</span>
+                        <span className="paper-tag">
+                          {
+                            paperLabels[
+                              t.theme === "sale" && size === "shelf"
+                                ? "A4"
+                                : size
+                            ]
+                          }
+                        </span>
                       </div>
                       <div className="card-meta">
                         <div>
@@ -890,13 +919,15 @@ export default function App() {
                           <span>
                             {t.category}
                             <i />{" "}
-                            {t.theme === "minimal"
-                              ? "シンプル"
-                              : t.theme === "bold"
-                                ? "文字を大きく"
-                                : t.theme === "organic"
-                                  ? "ナチュラル"
-                                  : "写真・イラスト"}
+                            {t.theme === "sale"
+                              ? "店舗の特売書式"
+                              : t.theme === "minimal"
+                                ? "シンプル"
+                                : t.theme === "bold"
+                                  ? "文字を大きく"
+                                  : t.theme === "organic"
+                                    ? "ナチュラル"
+                                    : "写真・イラスト"}
                           </span>
                         </div>
                         <span className="card-open">
@@ -1218,7 +1249,13 @@ export default function App() {
                                 }
                               />
                             </Field>
-                            <Field label="内容量・単位">
+                            <Field
+                              label={
+                                doc.theme === "sale"
+                                  ? "サイズ・容量"
+                                  : "内容量・単位"
+                              }
+                            >
                               <input
                                 value={doc.unit}
                                 maxLength={30}
@@ -1228,6 +1265,30 @@ export default function App() {
                                 }
                               />
                             </Field>
+                            {doc.theme === "sale" && (
+                              <>
+                                <Field label="メモ1（青文字・価格の上）">
+                                  <input
+                                    value={doc.memo1 ?? ""}
+                                    maxLength={40}
+                                    placeholder="空欄で非表示"
+                                    onChange={(e) =>
+                                      patch({ memo1: e.target.value })
+                                    }
+                                  />
+                                </Field>
+                                <Field label="メモ2（黒文字・左側）">
+                                  <input
+                                    value={doc.memo2 ?? ""}
+                                    maxLength={40}
+                                    placeholder="空欄で非表示"
+                                    onChange={(e) =>
+                                      patch({ memo2: e.target.value })
+                                    }
+                                  />
+                                </Field>
+                              </>
+                            )}
                             <Field label="見出しラベル">
                               <input
                                 value={doc.badge}
@@ -1295,35 +1356,42 @@ export default function App() {
                               </strong>
                             </div>
                           </div>
-                          <div className="form-section">
-                            <div className="form-section-title">
-                              <span className="number-dot">3</span>
-                              <h2>商品画像</h2>
-                            </div>
-                            <button
-                              className="image-upload"
-                              onClick={() => fileRef.current?.click()}
-                            >
-                              {doc.image ? (
-                                <img src={doc.image} alt="選択した商品画像" />
-                              ) : (
-                                <ImagePlus size={30} />
-                              )}
-                              <span>
-                                <strong>画像を変更</strong>
-                                <small>PNG・JPEG・WebP / 4MBまで</small>
-                              </span>
-                              <Upload size={16} />
-                            </button>
-                            {doc.image && (
-                              <button
-                                className="text-button remove-image"
-                                onClick={() => patch({ image: null })}
-                              >
-                                画像を非表示
-                              </button>
-                            )}
-                          </div>
+                          {doc.theme !== "sale" && (
+                            <>
+                              <div className="form-section">
+                                <div className="form-section-title">
+                                  <span className="number-dot">3</span>
+                                  <h2>商品画像</h2>
+                                </div>
+                                <button
+                                  className="image-upload"
+                                  onClick={() => fileRef.current?.click()}
+                                >
+                                  {doc.image ? (
+                                    <img
+                                      src={doc.image}
+                                      alt="選択した商品画像"
+                                    />
+                                  ) : (
+                                    <ImagePlus size={30} />
+                                  )}
+                                  <span>
+                                    <strong>画像を変更</strong>
+                                    <small>PNG・JPEG・WebP / 4MBまで</small>
+                                  </span>
+                                  <Upload size={16} />
+                                </button>
+                                {doc.image && (
+                                  <button
+                                    className="text-button remove-image"
+                                    onClick={() => patch({ image: null })}
+                                  >
+                                    画像を非表示
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </motion.div>
                       ) : (
                         <motion.div key="design" {...fade}>
@@ -1344,12 +1412,20 @@ export default function App() {
                               >
                                 <option value="A4">A4（210 × 297 mm）</option>
                                 <option value="A5">A5（148 × 210 mm）</option>
-                                <option value="shelf">
+                                <option
+                                  value="shelf"
+                                  disabled={doc.theme === "sale"}
+                                >
                                   棚札（148 × 52 mm）
                                 </option>
                               </select>
                             </Field>
-                            {doc.paper !== "shelf" && (
+                            {doc.theme === "sale" && (
+                              <p className="field-hint sale-format-note">
+                                店舗書式はA4・A5の横向きです。
+                              </p>
+                            )}
+                            {doc.paper !== "shelf" && doc.theme !== "sale" && (
                               <Field label="用紙の向き">
                                 <div className="segmented-control">
                                   <button
@@ -1398,10 +1474,17 @@ export default function App() {
                           </div>
                           <div className="form-section">
                             <div className="form-section-title">
-                              <h2>カラー</h2>
+                              <h2>
+                                {doc.theme === "sale"
+                                  ? "価格・見出しの色"
+                                  : "カラー"}
+                              </h2>
                             </div>
                             <div className="color-palette">
-                              {palette.map((color) => (
+                              {(doc.theme === "sale"
+                                ? ["#ff0000", ...palette]
+                                : palette
+                              ).map((color) => (
                                 <button
                                   key={color}
                                   aria-label={`カラー ${color}`}
@@ -1854,6 +1937,17 @@ export default function App() {
                           templateId: t.id,
                           theme: t.theme,
                           color: t.color,
+                          ...(t.theme === "sale"
+                            ? {
+                                orientation: "landscape" as const,
+                                paper:
+                                  doc.paper === "shelf"
+                                    ? ("A4" as const)
+                                    : doc.paper,
+                                memo1: doc.memo1 ?? "",
+                                memo2: doc.memo2 ?? "",
+                              }
+                            : {}),
                         });
                         setModal(null);
                       }}

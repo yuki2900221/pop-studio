@@ -1,6 +1,6 @@
 export type Category = "すべて" | "青果" | "精肉" | "鮮魚" | "日配" | "食品";
 export type Theme =
-  "market" | "minimal" | "bold" | "organic" | "fresh" | "daily";
+  "market" | "minimal" | "bold" | "organic" | "fresh" | "daily" | "sale";
 export type TaxRounding = "floor" | "round" | "ceil";
 export type Paper = "A4" | "A5" | "shelf";
 
@@ -16,6 +16,8 @@ export interface Template {
   price: number;
   badge: string;
   image: string | null;
+  memo1?: string;
+  memo2?: string;
 }
 
 export interface PopDocument {
@@ -37,6 +39,8 @@ export interface PopDocument {
   updatedAt: string;
   fontScale: number;
   showTax: boolean;
+  memo1?: string;
+  memo2?: string;
 }
 
 export const categories: Category[] = [
@@ -51,6 +55,21 @@ export const STORAGE_KEY = "pop-studio.documents.v1";
 export const MAX_DOCUMENTS = 100;
 
 export const templates: Template[] = [
+  {
+    id: "store-sale",
+    name: "特売POP（店舗書式）",
+    category: "食品",
+    theme: "sale",
+    color: "#ff0000",
+    productName: "商品名称",
+    origin: "産地・メーカー",
+    unit: "サイズ・容量",
+    price: 398,
+    badge: "お買得品",
+    image: null,
+    memo1: "メモ1",
+    memo2: "メモ2",
+  },
   {
     id: "citrus-market",
     name: "青果スタンダード",
@@ -206,6 +225,8 @@ export function createDocument(template: Template = templates[0]): PopDocument {
     updatedAt: new Date().toISOString(),
     fontScale: 1,
     showTax: true,
+    memo1: template.memo1 ?? "",
+    memo2: template.memo2 ?? "",
   };
 }
 
@@ -255,6 +276,13 @@ function boundedString(
   );
 }
 
+function optionalMemo(value: unknown): value is string | undefined {
+  return (
+    value === undefined ||
+    (boundedString(value, 40) && !/[\u0000-\u001f\u007f]/.test(value))
+  );
+}
+
 /** Uploaded raster bytes or a same-origin asset path; external and executable URLs are rejected. */
 export function isSafeImage(value: unknown): value is string | null {
   if (value === null) return true;
@@ -286,7 +314,7 @@ export function validateDocument(value: unknown): value is PopDocument {
     boundedString(v.id, 100, false) &&
     boundedString(v.name, 100, false) &&
     boundedString(v.templateId, 100, false) &&
-    ["market", "minimal", "bold", "organic", "fresh", "daily"].includes(
+    ["market", "minimal", "bold", "organic", "fresh", "daily", "sale"].includes(
       v.theme as string,
     ) &&
     typeof v.color === "string" &&
@@ -294,6 +322,8 @@ export function validateDocument(value: unknown): value is PopDocument {
     boundedString(v.productName, 40) &&
     boundedString(v.origin, 40) &&
     boundedString(v.unit, 30) &&
+    optionalMemo(v.memo1) &&
+    optionalMemo(v.memo2) &&
     typeof v.price === "string" &&
     /^(?:\d{1,7})?$/.test(v.price) &&
     Number(v.price) <= 1_000_000 &&

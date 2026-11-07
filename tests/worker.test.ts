@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import worker, {
-  AI_MODEL,
-  isGrounded,
-  parseExtraction,
-  type Env,
-} from "../worker/index";
+import worker, { isGrounded, parseExtraction, type Env } from "../worker/index";
+import { AI_MODEL } from "../worker/ai-config";
 
 const validResult = {
   productName: "りんご",

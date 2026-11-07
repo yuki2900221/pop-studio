@@ -42,7 +42,8 @@ export default function PopArtwork({
   const unitSize = Math.min(
     shelf ? 16 : 22,
     (portrait ? 450 : shelf ? 380 : doc.image ? 440 : 650) /
-      Math.max(doc.unit.length, 1),
+      Math.max(doc.unit.length, 1) -
+      2,
   );
   const badgeSize = Math.min(24, 300 / Math.max(doc.badge.length, 1) - 2);
   const priceSize =
@@ -50,11 +51,11 @@ export default function PopArtwork({
     Math.min(1, 4 / Math.max(String(safePrice).length, 3));
   const cx = portrait ? w / 2 : shelf ? 220 : doc.image ? 320 : w / 2;
   const imageX = portrait ? 45 : shelf ? 540 : 450,
-    imageY = portrait ? 330 : shelf ? 28 : 220,
+    imageY = portrait ? 265 : shelf ? 28 : 220,
     imageW = portrait ? 504 : shelf ? 260 : 430,
-    imageH = portrait ? 310 : shelf ? 240 : 350;
+    imageH = portrait ? 285 : shelf ? 240 : 350;
   const nameY = shelf ? 95 : portrait ? 212 : 188,
-    priceY = shelf ? 214 : portrait ? 690 : 460;
+    priceY = shelf ? 214 : portrait ? 730 : 460;
   return (
     <svg
       id={id}

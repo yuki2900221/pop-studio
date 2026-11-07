@@ -47,7 +47,7 @@ describe("document boundaries", () => {
       memo1: "メモ1",
       memo2: "メモ2",
       image: null,
-      paper: "A4",
+      paper: "B5",
       orientation: "landscape",
     });
     const oldDocument = { ...createDocument(templates[1]) };
@@ -245,6 +245,7 @@ describe("physical printing and HTML isolation", () => {
   it("escapes product text and metadata in the generated print document", () => {
     const doc = {
       ...createDocument(),
+      paper: "A4" as const,
       productName: "<img src=x onerror=alert(1)>",
       name: "</title><script>alert(1)</script>",
       origin: '"&<',
@@ -275,7 +276,7 @@ describe("physical printing and HTML isolation", () => {
           const doc = { ...createDocument(template), paper, orientation };
           const svg = renderToStaticMarkup(createElement(PopArtwork, { doc }));
           const html = buildPrintHtml(doc);
-          expect(html).toContain(`<article class="sheet">${svg}</article>`);
+          expect(html).toContain(`${svg}</div>`);
           const { width, height } = paperDimensions(doc);
           expect(html).toContain(
             `@page { size: ${width}mm ${height}mm; margin: 0; }`,

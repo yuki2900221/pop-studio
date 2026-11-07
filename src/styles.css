@@ -2880,3 +2880,54 @@ p {
   line-height: 1.8;
   margin: -4px 0 18px;
 }
+
+.continuous-entry {
+  padding: 18px 22px 12px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(125deg, #ffffffeb, #f5faf6a8);
+  flex-shrink: 0;
+}
+.continuous-entry-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 12px;
+}
+.continuous-entry .field {
+  margin-bottom: 7px;
+}
+.continuous-entry .field-hint {
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+.continuous-entry .primary-button,
+.continuous-entry .secondary-button {
+  min-height: 36px;
+  margin-top: 6px;
+  padding: 9px 10px;
+  font-size: 11px;
+}
+.continuous-queue-link {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin: 10px auto 0;
+  font-size: 11px;
+}
+.print-sheet-count {
+  margin: -10px 0 15px;
+}
+.print-modal-preview .queue-sheet {
+  height: 210px;
+  max-height: 210px;
+  width: auto;
+  max-width: 100%;
+}
+@media (max-width: 760px) {
+  .continuous-entry {
+    padding: 16px 22px;
+  }
+  .continuous-entry-fields {
+    grid-template-columns: minmax(0, 1fr) 110px;
+  }
+}

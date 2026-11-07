@@ -2,7 +2,69 @@ export type Category = "すべて" | "青果" | "精肉" | "鮮魚" | "日配" |
 export type Theme =
   "market" | "minimal" | "bold" | "organic" | "fresh" | "daily" | "sale";
 export type TaxRounding = "floor" | "round" | "ceil";
-export type Paper = "A4" | "A5" | "shelf";
+export const b5Papers = ["B5", "B5-half", "B5-quarter", "B5-eighth"] as const;
+export type B5Paper = (typeof b5Papers)[number];
+export type Paper = "A4" | "A5" | "shelf" | B5Paper;
+
+/** JIS B5 sheets; each POP stays landscape after the sheet is cut. */
+export const b5Layouts: Record<
+  B5Paper,
+  {
+    label: string;
+    columns: number;
+    rows: number;
+    sheetWidth: number;
+    sheetHeight: number;
+    width: number;
+    height: number;
+    orientation: "landscape" | "portrait";
+  }
+> = {
+  B5: {
+    label: "B5",
+    columns: 1,
+    rows: 1,
+    sheetWidth: 257,
+    sheetHeight: 182,
+    width: 257,
+    height: 182,
+    orientation: "landscape",
+  },
+  "B5-half": {
+    label: "B5 1/2",
+    columns: 1,
+    rows: 2,
+    sheetWidth: 182,
+    sheetHeight: 257,
+    width: 182,
+    height: 128.5,
+    orientation: "portrait",
+  },
+  "B5-quarter": {
+    label: "B5 1/4",
+    columns: 2,
+    rows: 2,
+    sheetWidth: 257,
+    sheetHeight: 182,
+    width: 128.5,
+    height: 91,
+    orientation: "landscape",
+  },
+  "B5-eighth": {
+    label: "B5 1/8",
+    columns: 2,
+    rows: 4,
+    sheetWidth: 182,
+    sheetHeight: 257,
+    width: 91,
+    height: 64.25,
+    orientation: "portrait",
+  },
+};
+
+export function isB5Paper(paper: unknown): paper is B5Paper {
+  return b5Papers.includes(paper as B5Paper);
+}
 
 export interface Template {
   id: string;
@@ -220,7 +282,12 @@ export function createDocument(template: Template = templates[0]): PopDocument {
     taxRounding: "floor",
     badge: template.badge,
     image: template.image,
-    paper: template.id === "egg-minimal" ? "shelf" : "A4",
+    paper:
+      template.theme === "sale"
+        ? "B5"
+        : template.id === "egg-minimal"
+          ? "shelf"
+          : "A4",
     orientation: "landscape",
     updatedAt: new Date().toISOString(),
     fontScale: 1,
@@ -331,7 +398,7 @@ export function validateDocument(value: unknown): value is PopDocument {
     ["floor", "round", "ceil"].includes(v.taxRounding as string) &&
     boundedString(v.badge, 16) &&
     isSafeImage(v.image) &&
-    ["A4", "A5", "shelf"].includes(v.paper as string) &&
+    (["A4", "A5", "shelf"].includes(v.paper as string) || isB5Paper(v.paper)) &&
     ["landscape", "portrait"].includes(v.orientation as string) &&
     typeof v.updatedAt === "string" &&
     v.updatedAt.length <= 40 &&

@@ -44,6 +44,10 @@ import {
   ZoomIn,
 } from "lucide-react";
 import PopArtwork from "./components/PopArtwork";
+import PaperSelect, { paperLabels } from "./components/PaperSelect";
+import PrintQueueView from "./components/PrintQueueView";
+import PrintSheetPreview from "./components/PrintSheetPreview";
+import "./print-queue.css";
 import {
   templates,
   categories,
@@ -53,17 +57,31 @@ import {
   validateDocument,
   taxIncluded,
   formatPrice,
+  b5Layouts,
+  isB5Paper,
   type PopDocument,
   type Template,
 } from "./lib/model";
-import { printDocument } from "./lib/print";
+import {
+  buildPrintSheets,
+  paperDimensions,
+  printBatch,
+  printDocument,
+  type PrintEntry,
+} from "./lib/print";
+import {
+  loadPrintQueue,
+  savePrintQueue,
+  makeQueueEntry,
+  nextProductDocument,
+} from "./lib/print-queue";
 import {
   SALE_FONT_URL,
   PRICE_FONT_URL,
   saleFontCss,
 } from "./lib/artwork-fonts";
 
-type View = "templates" | "saved" | "editor";
+type View = "templates" | "saved" | "editor" | "queue";
 type Modal =
   "print" | "ai" | "settings" | "help" | "templates" | "delete" | null;
 const palette = [
@@ -80,7 +98,9 @@ const fade = {
   exit: { opacity: 0, y: -6 },
   transition: { duration: 0.23 },
 };
-const paperLabels = { A4: "A4", A5: "A5", shelf: "棚札" };
+function templatePaper(t: Template, paper: PopDocument["paper"]) {
+  return t.theme === "sale" && !isB5Paper(paper) ? "B5" : paper;
+}
 function IconButton({
   label,
   children,
@@ -163,6 +183,12 @@ export default function App() {
     [view, setView] = useState<View>("templates"),
     [docs, setDocs] = useState<PopDocument[]>([]),
     [doc, setDoc] = useState<PopDocument>(() => createDocument(templates[0]));
+  const [queue, setQueue] = useState<PrintEntry[]>([]);
+  const [queueDraftId, setQueueDraftId] = useState<string | null>(null);
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const productNameRef = useRef<HTMLInputElement>(null);
+  const focusProductRef = useRef(false);
   const [history, setHistory] = useState<PopDocument[]>([]),
     [future, setFuture] = useState<PopDocument[]>([]),
     [category, setCategory] = useState("すべて"),
@@ -170,9 +196,14 @@ export default function App() {
     [size, setSize] = useState<PopDocument["paper"]>(() => {
       try {
         const paper = localStorage.getItem("pop-studio.paper.v1");
-        return paper === "A5" || paper === "shelf" ? paper : "A4";
+        return paper === "A4" ||
+          paper === "A5" ||
+          paper === "shelf" ||
+          (paper !== null && isB5Paper(paper as PopDocument["paper"]))
+          ? (paper as PopDocument["paper"])
+          : "B5";
       } catch {
-        return "A4";
+        return "B5";
       }
     }),
     [listMode, setListMode] = useState(false);
@@ -198,8 +229,8 @@ export default function App() {
     modalRef = useRef<HTMLDivElement>(null),
     toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     aiController = useRef<AbortController | null>(null);
-  const workspaceRef = useRef({ doc, docs, view, dirty });
-  workspaceRef.current = { doc, docs, view, dirty };
+  const workspaceRef = useRef({ doc, docs, view, dirty, queueDraftId, copies });
+  workspaceRef.current = { doc, docs, view, dirty, queueDraftId, copies };
   const notify = useCallback((text: string) => {
     setToast(text);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -207,14 +238,23 @@ export default function App() {
   }, []);
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDocs(loadDocuments(window.localStorage));
-      setLoading(false);
+      try {
+        const storage = window.localStorage;
+        setDocs(loadDocuments(storage));
+        setQueue(loadPrintQueue(storage));
+      } catch {
+        notify(
+          "端末内の保存を利用できません。ブラウザの保存設定を確認してください",
+        );
+      } finally {
+        setLoading(false);
+      }
     }, 650);
     return () => {
       clearTimeout(timer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, []);
+  }, [notify]);
   useEffect(() => {
     if (modal === "ai") {
       let mounted = true;
@@ -331,7 +371,14 @@ export default function App() {
   }, [doc, docs, notify]);
   useEffect(() => {
     function shortcuts(e: KeyboardEvent) {
-      if (view !== "editor" || modal || (!e.metaKey && !e.ctrlKey)) return;
+      if (modal || (!e.metaKey && !e.ctrlKey)) return;
+      if (view === "queue" && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        const result = printBatch(queueRef.current);
+        if (!result.ok) notify(result.error || "印刷画面を開けませんでした");
+        return;
+      }
+      if (view !== "editor") return;
       if (e.key.toLowerCase() === "s") {
         e.preventDefault();
         save();
@@ -347,7 +394,7 @@ export default function App() {
     }
     window.addEventListener("keydown", shortcuts);
     return () => window.removeEventListener("keydown", shortcuts);
-  }, [view, save, undo, redo, modal]);
+  }, [view, save, undo, redo, modal, notify]);
   useEffect(() => {
     const f = (e: BeforeUnloadEvent) => {
       if (dirty) {
@@ -360,8 +407,15 @@ export default function App() {
   }, [dirty]);
   const start = (t: Template) => {
     const next = createDocument(t);
-    next.paper = t.theme === "sale" && size === "shelf" ? "A4" : size;
+    next.paper = templatePaper(t, size);
+    workspaceRef.current = {
+      ...workspaceRef.current,
+      doc: next,
+      dirty: false,
+      view: "editor",
+    };
     setDoc(next);
+    setQueueDraftId(null);
     setHistory([]);
     setFuture([]);
     setDirty(false);
@@ -371,15 +425,130 @@ export default function App() {
     setModal(null);
   };
   const openDoc = (d: PopDocument) => {
+    workspaceRef.current = {
+      ...workspaceRef.current,
+      doc: { ...d },
+      dirty: false,
+      view: "editor",
+    };
     setDoc({ ...d });
+    setQueueDraftId(null);
     setHistory([]);
     setFuture([]);
     setDirty(false);
     setView("editor");
     setPanel("product");
   };
+  const persistQueue = (entries: PrintEntry[]) => {
+    const result = savePrintQueue(window.localStorage, entries);
+    if (!result.ok) {
+      notify(result.error || "印刷待ちを保存できませんでした");
+      return false;
+    }
+    queueRef.current = entries;
+    setQueue(entries);
+    return true;
+  };
+  const beginNextProduct = (base: PopDocument) => {
+    const next = nextProductDocument(base);
+    focusProductRef.current = true;
+    openDoc(next);
+    setAiText("");
+    setAiResult(null);
+    setAiError("");
+  };
+  const enqueue = (advance: boolean) => {
+    if (doc.theme === "sale" && !isB5Paper(doc.paper)) {
+      notify("POPサイズをB5・B5 1/2・B5 1/4・B5 1/8から選択してください");
+      return;
+    }
+    try {
+      const snapshot = {
+        ...doc,
+        name: doc.name === "新しいPOP" ? `${doc.productName}のPOP` : doc.name,
+      };
+      const entry = makeQueueEntry(snapshot, copies);
+      const current = queueRef.current;
+      const replacing =
+        queueDraftId !== null &&
+        current.some((item) => item.id === queueDraftId);
+      if (replacing) entry.id = queueDraftId!;
+      const next = replacing
+        ? current.map((item) => (item.id === entry.id ? entry : item))
+        : [...current, entry];
+      if (!persistQueue(next)) return;
+      if (advance) beginNextProduct(snapshot);
+      else {
+        setQueueDraftId(entry.id);
+        setDoc(snapshot);
+        setDirty(false);
+        workspaceRef.current = {
+          ...workspaceRef.current,
+          doc: snapshot,
+          dirty: false,
+        };
+      }
+      notify(replacing ? "印刷待ちを更新しました" : "印刷待ちに追加しました");
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "入力内容を確認してください",
+      );
+    }
+  };
+  const updateQueueEntry = (
+    id: string,
+    changes: Partial<Pick<PrintEntry, "copies">> & {
+      paper?: PopDocument["paper"];
+    },
+  ) => {
+    persistQueue(
+      queueRef.current.map((entry) =>
+        entry.id === id
+          ? {
+              ...entry,
+              copies: changes.copies ?? entry.copies,
+              doc: changes.paper
+                ? {
+                    ...entry.doc,
+                    paper: changes.paper,
+                    orientation: isB5Paper(changes.paper)
+                      ? "landscape"
+                      : entry.doc.orientation,
+                  }
+                : entry.doc,
+            }
+          : entry,
+      ),
+    );
+  };
   const leave = (next: View) => {
-    if (view === "editor" && dirty) {
+    const queued = queueRef.current.find((entry) => entry.id === queueDraftId);
+    if (
+      view === "editor" &&
+      queued &&
+      (dirty ||
+        queued.copies !== copies ||
+        JSON.stringify(queued.doc) !== JSON.stringify(doc))
+    ) {
+      try {
+        const entry = { ...makeQueueEntry(doc, copies), id: queued.id };
+        if (
+          !persistQueue(
+            queueRef.current.map((item) =>
+              item.id === queued.id ? entry : item,
+            ),
+          )
+        )
+          return;
+        setDirty(false);
+        workspaceRef.current = { ...workspaceRef.current, dirty: false };
+      } catch {
+        notify(
+          "印刷待ちを更新するため、商品名と正しい本体価格を入力してください",
+        );
+        return;
+      }
+    } else if (view === "editor" && dirty) {
       const result = saveDocuments(
         window.localStorage,
         docs.some((d) => d.id === doc.id)
@@ -431,6 +600,30 @@ export default function App() {
         updatedAt: new Date().toISOString(),
       }));
       const current = workspaceRef.current;
+      const queued = queueRef.current.find(
+        (entry) => entry.id === current.queueDraftId,
+      );
+      if (current.view === "editor" && queued) {
+        try {
+          const updated = {
+            ...makeQueueEntry(current.doc, current.copies),
+            id: queued.id,
+          };
+          if (
+            !persistQueue(
+              queueRef.current.map((entry) =>
+                entry.id === queued.id ? updated : entry,
+              ),
+            )
+          )
+            return;
+        } catch {
+          notify(
+            "印刷待ちを更新するため、商品名と正しい本体価格を入力してください",
+          );
+          return;
+        }
+      }
       let retained = current.docs;
       if (current.view === "editor" && current.dirty)
         retained = retained.some((d) => d.id === current.doc.id)
@@ -614,9 +807,15 @@ export default function App() {
     `${d.name} ${d.productName} ${d.origin}`.includes(query),
   );
   const validPrint =
+    validateDocument(doc) &&
     !!doc.productName.trim() &&
     /^\d{1,7}$/.test(doc.price) &&
     Number(doc.price) <= 1000000;
+  const dimensions = paperDimensions(doc);
+  const singleSheets = validPrint
+    ? buildPrintSheets([{ id: "current", doc, copies }])
+    : [];
+  const queuePopCount = queue.reduce((total, entry) => total + entry.copies, 0);
   if (loading) return <Skeleton />;
   return (
     <div className="app-shell">
@@ -659,6 +858,15 @@ export default function App() {
             <FolderOpen size={19} />
             <span>保存したPOP</span>
             <small>{docs.length}</small>
+          </button>
+          <button
+            aria-label={`印刷待ち ${queuePopCount}`}
+            className={view === "queue" ? "nav-item selected" : "nav-item"}
+            onClick={() => leave("queue")}
+          >
+            <Printer size={19} />
+            <span>印刷待ち</span>
+            <small>{queuePopCount}</small>
           </button>
           {view === "editor" && (
             <button
@@ -726,9 +934,11 @@ export default function App() {
             <strong>
               {view === "editor"
                 ? "POPを編集"
-                : view === "saved"
-                  ? "保存したPOP"
-                  : "テンプレート"}
+                : view === "queue"
+                  ? "印刷待ち"
+                  : view === "saved"
+                    ? "保存したPOP"
+                    : "テンプレート"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -748,7 +958,42 @@ export default function App() {
           </div>
         </header>
         <AnimatePresence mode="wait">
-          {view !== "editor" ? (
+          {view === "queue" ? (
+            <motion.div key="queue" {...fade}>
+              <PrintQueueView
+                entries={queue}
+                onChange={updateQueueEntry}
+                onRemove={(id) => {
+                  if (
+                    persistQueue(
+                      queueRef.current.filter((entry) => entry.id !== id),
+                    )
+                  ) {
+                    if (queueDraftId === id) setQueueDraftId(null);
+                    notify("印刷待ちから外しました");
+                  }
+                }}
+                onEdit={(entry) => {
+                  openDoc(entry.doc);
+                  setCopies(entry.copies);
+                  setQueueDraftId(entry.id);
+                }}
+                onNew={() =>
+                  beginNextProduct(
+                    queue[queue.length - 1]?.doc ?? {
+                      ...createDocument(templates[0]),
+                      paper: templatePaper(templates[0], size),
+                    },
+                  )
+                }
+                onPrint={() => {
+                  const result = printBatch(queueRef.current);
+                  if (!result.ok)
+                    notify(result.error || "印刷画面を開けませんでした");
+                }}
+              />
+            </motion.div>
+          ) : view !== "editor" ? (
             <motion.main key={view} className="library-main" {...fade}>
               <div className="page-heading">
                 <div>
@@ -812,17 +1057,11 @@ export default function App() {
                   {view === "templates" && (
                     <label className="size-select">
                       <span>用紙</span>
-                      <select
-                        aria-label="用紙サイズ"
+                      <PaperSelect
+                        label="用紙サイズ"
                         value={size}
-                        onChange={(e) =>
-                          setSize(e.target.value as PopDocument["paper"])
-                        }
-                      >
-                        <option value="A4">A4</option>
-                        <option value="A5">A5</option>
-                        <option value="shelf">棚札</option>
-                      </select>
+                        onChange={setSize}
+                      />
                       <ChevronDown size={14} />
                     </label>
                   )}
@@ -900,10 +1139,7 @@ export default function App() {
                           <PopArtwork
                             doc={{
                               ...createDocument(t),
-                              paper:
-                                t.theme === "sale" && size === "shelf"
-                                  ? "A4"
-                                  : size,
+                              paper: templatePaper(t, size),
                             }}
                           />
                         </div>
@@ -912,13 +1148,7 @@ export default function App() {
                           このデザインを使う
                         </span>
                         <span className="paper-tag">
-                          {
-                            paperLabels[
-                              t.theme === "sale" && size === "shelf"
-                                ? "A4"
-                                : size
-                            ]
-                          }
+                          {paperLabels[templatePaper(t, size)]}
                         </span>
                       </div>
                       <div className="card-meta">
@@ -1039,7 +1269,7 @@ export default function App() {
                   <CheckCheck size={15} />
                   すべてのデザインを編集できます
                 </span>
-                <span>A4・A5・棚札対応</span>
+                <span>B5・B5 1/2・B5 1/4・B5 1/8対応</span>
               </div>
             </motion.main>
           ) : (
@@ -1063,9 +1293,11 @@ export default function App() {
                       <span className={`green-dot ${dirty ? "unsaved" : ""}`} />
                       {dirty
                         ? "未保存の変更"
-                        : docs.some((d) => d.id === doc.id)
-                          ? "この端末に保存済み"
-                          : "新しいPOP"}
+                        : queueDraftId
+                          ? "印刷待ちに保存済み"
+                          : docs.some((d) => d.id === doc.id)
+                            ? "この端末に保存済み"
+                            : "新しいPOP"}
                       <span className="title-separator">·</span>
                       {paperLabels[doc.paper]}{" "}
                       {doc.paper === "shelf"
@@ -1127,12 +1359,12 @@ export default function App() {
                     </IconButton>
                   </div>
                   <div
-                    className={`canvas-area ${doc.orientation === "portrait" ? "portrait-canvas" : ""}`}
+                    className={`canvas-area ${doc.orientation === "portrait" && !isB5Paper(doc.paper) ? "portrait-canvas" : ""}`}
                   >
                     <div className="canvas-ruler horizontal-ruler" />
                     <div className="canvas-ruler vertical-ruler" />
                     <motion.div
-                      className={`artwork-wrapper ${doc.orientation === "portrait" && doc.paper !== "shelf" ? "portrait-artwork" : ""}`}
+                      className={`artwork-wrapper ${doc.orientation === "portrait" && doc.paper !== "shelf" && !isB5Paper(doc.paper) ? "portrait-artwork" : ""}`}
                       animate={{ width: `${zoom}%` }}
                       transition={{
                         type: "spring",
@@ -1141,16 +1373,7 @@ export default function App() {
                       }}
                     >
                       <div className="dimension-label">
-                        {doc.paper === "A4"
-                          ? doc.orientation === "landscape"
-                            ? "297 × 210"
-                            : "210 × 297"
-                          : doc.paper === "A5"
-                            ? doc.orientation === "landscape"
-                              ? "210 × 148"
-                              : "148 × 210"
-                            : "148 × 52"}{" "}
-                        mm
+                        {dimensions.width} × {dimensions.height} mm
                       </div>
                       <PopArtwork id="editor-artwork" doc={doc} />
                     </motion.div>
@@ -1192,6 +1415,90 @@ export default function App() {
                   </div>
                 </section>
                 <aside className="properties-panel">
+                  <div className="continuous-entry">
+                    <div className="continuous-entry-fields">
+                      <Field label="POPサイズ">
+                        <PaperSelect
+                          value={doc.paper}
+                          legacy={doc.theme !== "sale"}
+                          onChange={(paper) =>
+                            patch({
+                              paper,
+                              ...(isB5Paper(paper)
+                                ? { orientation: "landscape" as const }
+                                : {}),
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="POPの枚数">
+                        <input
+                          aria-label="POPの枚数"
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={copies}
+                          onChange={(e) =>
+                            setCopies(
+                              Math.max(
+                                1,
+                                Math.min(
+                                  20,
+                                  Math.floor(Number(e.target.value) || 1),
+                                ),
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
+                    </div>
+                    {isB5Paper(doc.paper) ? (
+                      <p className="field-hint">
+                        B5用紙・
+                        {b5Layouts[doc.paper].orientation === "landscape"
+                          ? "横"
+                          : "縦"}
+                        に
+                        {b5Layouts[doc.paper].columns *
+                          b5Layouts[doc.paper].rows}
+                        枚を配置
+                      </p>
+                    ) : doc.theme === "sale" ? (
+                      <p className="field-hint">
+                        以前のサイズです。印刷待ちにはB5のサイズを選んでください。
+                      </p>
+                    ) : null}
+                    <button
+                      className="primary-button full-width"
+                      disabled={
+                        !validPrint ||
+                        (doc.theme === "sale" && !isB5Paper(doc.paper))
+                      }
+                      onClick={() => enqueue(true)}
+                    >
+                      <Plus size={16} />
+                      {queueDraftId ? "更新して次の商品" : "追加して次の商品"}
+                      <ArrowRight size={16} />
+                    </button>
+                    <button
+                      className="secondary-button full-width"
+                      disabled={
+                        !validPrint ||
+                        (doc.theme === "sale" && !isB5Paper(doc.paper))
+                      }
+                      onClick={() => enqueue(false)}
+                    >
+                      <Printer size={16} />
+                      {queueDraftId ? "印刷待ちを更新" : "印刷待ちに追加"}
+                    </button>
+                    <button
+                      className="text-button continuous-queue-link"
+                      onClick={() => leave("queue")}
+                    >
+                      印刷待ちを確認（{queuePopCount}枚）
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
                   <div
                     className="panel-tabs"
                     role="tablist"
@@ -1239,6 +1546,13 @@ export default function App() {
                             </div>
                             <Field label="商品名">
                               <input
+                                ref={(node) => {
+                                  productNameRef.current = node;
+                                  if (node && focusProductRef.current) {
+                                    node.focus();
+                                    focusProductRef.current = false;
+                                  }
+                                }}
                                 value={doc.productName}
                                 maxLength={40}
                                 placeholder="例：温州みかん"
@@ -1409,60 +1723,57 @@ export default function App() {
                               <h2>用紙とレイアウト</h2>
                             </div>
                             <Field label="用紙サイズ">
-                              <select
+                              <PaperSelect
+                                label="デザインのPOPサイズ"
                                 value={doc.paper}
-                                onChange={(e) =>
+                                legacy={doc.theme !== "sale"}
+                                onChange={(paper) =>
                                   patch({
-                                    paper: e.target
-                                      .value as PopDocument["paper"],
+                                    paper,
+                                    ...(isB5Paper(paper)
+                                      ? { orientation: "landscape" as const }
+                                      : {}),
                                   })
                                 }
-                              >
-                                <option value="A4">A4（210 × 297 mm）</option>
-                                <option value="A5">A5（148 × 210 mm）</option>
-                                <option
-                                  value="shelf"
-                                  disabled={doc.theme === "sale"}
-                                >
-                                  棚札（148 × 52 mm）
-                                </option>
-                              </select>
+                              />
                             </Field>
                             {doc.theme === "sale" && (
                               <p className="field-hint sale-format-note">
-                                店舗書式はA4・A5の横向きです。
+                                POPは横向きです。印刷用紙の向きと面付けはサイズに合わせます。
                               </p>
                             )}
-                            {doc.paper !== "shelf" && doc.theme !== "sale" && (
-                              <Field label="用紙の向き">
-                                <div className="segmented-control">
-                                  <button
-                                    className={
-                                      doc.orientation === "landscape"
-                                        ? "active"
-                                        : ""
-                                    }
-                                    onClick={() =>
-                                      patch({ orientation: "landscape" })
-                                    }
-                                  >
-                                    横向き
-                                  </button>
-                                  <button
-                                    className={
-                                      doc.orientation === "portrait"
-                                        ? "active"
-                                        : ""
-                                    }
-                                    onClick={() =>
-                                      patch({ orientation: "portrait" })
-                                    }
-                                  >
-                                    縦向き
-                                  </button>
-                                </div>
-                              </Field>
-                            )}
+                            {doc.paper !== "shelf" &&
+                              !isB5Paper(doc.paper) &&
+                              doc.theme !== "sale" && (
+                                <Field label="用紙の向き">
+                                  <div className="segmented-control">
+                                    <button
+                                      className={
+                                        doc.orientation === "landscape"
+                                          ? "active"
+                                          : ""
+                                      }
+                                      onClick={() =>
+                                        patch({ orientation: "landscape" })
+                                      }
+                                    >
+                                      横向き
+                                    </button>
+                                    <button
+                                      className={
+                                        doc.orientation === "portrait"
+                                          ? "active"
+                                          : ""
+                                      }
+                                      onClick={() =>
+                                        patch({ orientation: "portrait" })
+                                      }
+                                    >
+                                      縦向き
+                                    </button>
+                                  </div>
+                                </Field>
+                              )}
                             <Field label="文字サイズ">
                               <div className="range-row">
                                 <input
@@ -1683,36 +1994,40 @@ export default function App() {
               {modal === "print" && (
                 <>
                   <div className="print-modal-preview">
-                    <PopArtwork doc={doc} />
+                    {singleSheets[0] ? (
+                      <PrintSheetPreview sheet={singleSheets[0]} />
+                    ) : (
+                      <PopArtwork doc={doc} />
+                    )}
                   </div>
                   <div className="print-details">
                     <span>
-                      用紙サイズ
+                      印刷用紙
                       <strong>
-                        {paperLabels[doc.paper]}
-                        {doc.paper === "shelf"
-                          ? ""
-                          : doc.orientation === "landscape"
+                        {isB5Paper(doc.paper) ? "B5" : paperLabels[doc.paper]}
+                        {isB5Paper(doc.paper)
+                          ? b5Layouts[doc.paper].orientation === "landscape"
                             ? "・横"
-                            : "・縦"}
+                            : "・縦"
+                          : doc.paper === "shelf"
+                            ? ""
+                            : doc.orientation === "landscape"
+                              ? "・横"
+                              : "・縦"}
                       </strong>
                     </span>
                     <span>
-                      仕上がりサイズ
+                      POPの仕上がり
                       <strong>
-                        {doc.paper === "shelf"
-                          ? "148 × 52 mm"
-                          : doc.paper === "A4"
-                            ? doc.orientation === "landscape"
-                              ? "297 × 210 mm"
-                              : "210 × 297 mm"
-                            : doc.orientation === "landscape"
-                              ? "210 × 148 mm"
-                              : "148 × 210 mm"}
+                        {dimensions.width} × {dimensions.height} mm
                       </strong>
                     </span>
                   </div>
-                  <Field label="印刷枚数">
+                  <p className="field-hint print-sheet-count">
+                    POP {copies}枚 / 用紙 {singleSheets.length}枚
+                    {singleSheets.length > 1 ? "（先頭ページを表示）" : ""}
+                  </p>
+                  <Field label="印刷するPOPの枚数">
                     <div className="copies-control">
                       <IconButton
                         label="印刷枚数を減らす"
@@ -1731,7 +2046,10 @@ export default function App() {
                           setCopies(
                             Math.max(
                               1,
-                              Math.min(20, Number(e.target.value) || 1),
+                              Math.min(
+                                20,
+                                Math.floor(Number(e.target.value) || 1),
+                              ),
                             ),
                           )
                         }
@@ -1855,17 +2173,12 @@ export default function App() {
                   <p className="modal-description">
                     新しいPOPに使う用紙サイズを設定します。
                   </p>
-                  <Field label="既定の用紙サイズ">
-                    <select
+                  <Field label="既定のPOPサイズ">
+                    <PaperSelect
+                      label="既定のPOPサイズ"
                       value={size}
-                      onChange={(e) =>
-                        setSize(e.target.value as PopDocument["paper"])
-                      }
-                    >
-                      <option value="A4">A4（210 × 297 mm）</option>
-                      <option value="A5">A5（148 × 210 mm）</option>
-                      <option value="shelf">棚札（148 × 52 mm）</option>
-                    </select>
+                      onChange={setSize}
+                    />
                   </Field>
                   <div className="info-note">
                     <Printer size={17} />
@@ -1899,11 +2212,15 @@ export default function App() {
                         "デザインを選ぶ",
                         "カテゴリや用紙サイズでテンプレートを選択",
                       ],
-                      ["2", "商品情報を入力", "商品名・産地・価格・画像を変更"],
+                      [
+                        "2",
+                        "商品を続けて入力",
+                        "「追加して次の商品」で印刷待ちにためる",
+                      ],
                       [
                         "3",
-                        "保存して印刷",
-                        "この端末に保存し、原寸で印刷・PDF保存",
+                        "まとめて印刷",
+                        "印刷待ちでB5の面付けを確認し、まとめて印刷",
                       ],
                     ].map(([n, title, text]) => (
                       <div key={n}>
@@ -1948,10 +2265,9 @@ export default function App() {
                           ...(t.theme === "sale"
                             ? {
                                 orientation: "landscape" as const,
-                                paper:
-                                  doc.paper === "shelf"
-                                    ? ("A4" as const)
-                                    : doc.paper,
+                                paper: isB5Paper(doc.paper)
+                                  ? doc.paper
+                                  : ("B5" as const),
                                 memo1: doc.memo1 ?? "",
                                 memo2: doc.memo2 ?? "",
                               }

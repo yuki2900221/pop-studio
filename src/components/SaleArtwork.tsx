@@ -1,5 +1,5 @@
 import type { PopDocument } from "../lib/model";
-import { formatPrice, taxIncluded } from "../lib/model";
+import { formatPrice, taxIncluded, isB5Paper } from "../lib/model";
 import {
   SALE_FONT_FAMILY,
   PRICE_FONT_FAMILY,
@@ -28,7 +28,10 @@ export default function SaleArtwork({
   id?: string;
   className?: string;
 }) {
-  const portrait = doc.orientation === "portrait" && doc.paper !== "shelf";
+  const portrait =
+    doc.orientation === "portrait" &&
+    doc.paper !== "shelf" &&
+    !isB5Paper(doc.paper);
   const width = portrait ? 594 : 840,
     height = doc.paper === "shelf" ? 295 : portrait ? 840 : 594;
   const scale = Math.min(width / 1200, height / 848);

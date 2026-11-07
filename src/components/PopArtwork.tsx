@@ -1,6 +1,6 @@
 import SaleArtwork from "./SaleArtwork";
 import type { PopDocument } from "../lib/model";
-import { taxIncluded, formatPrice } from "../lib/model";
+import { taxIncluded, formatPrice, isB5Paper } from "../lib/model";
 
 export default function PopArtwork({
   doc,
@@ -13,7 +13,10 @@ export default function PopArtwork({
 }) {
   if (doc.theme === "sale")
     return <SaleArtwork doc={doc} id={id} className={className} />;
-  const portrait = doc.orientation === "portrait" && doc.paper !== "shelf";
+  const portrait =
+    doc.orientation === "portrait" &&
+    doc.paper !== "shelf" &&
+    !isB5Paper(doc.paper);
   const shelf = doc.paper === "shelf";
   const w = portrait ? 594 : 840,
     h = shelf ? 295 : portrait ? 840 : 594;

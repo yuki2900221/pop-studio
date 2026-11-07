@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDocument, templates } from "../src/lib/model";
-import { printDocument } from "../src/lib/print";
+import { printBatch, printDocument } from "../src/lib/print";
 import { SALE_FONT_FAMILY, PRICE_FONT_FAMILY } from "../src/lib/artwork-fonts";
 
 afterEach(() => {
@@ -98,5 +98,61 @@ describe("store POP print font readiness", () => {
     expect(popup.focus).toHaveBeenCalledOnce();
     expect(popup.print).toHaveBeenCalledOnce();
     expect(status.textContent).toBe("");
+  });
+
+  it("waits for a later product's image even if the first item only uses POP fonts", async () => {
+    vi.useFakeTimers();
+    const { popup } = popupWithFonts(async () => [{}]);
+    let finishImage: (() => void) | undefined;
+    const requested: string[] = [];
+    vi.stubGlobal(
+      "Image",
+      class {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(value: string) {
+          requested.push(value);
+          finishImage = () => this.onload?.();
+        }
+      },
+    );
+    const sale = createDocument(templates[0]);
+    const imageDoc = createDocument(templates[1]);
+    expect(
+      printBatch([
+        { id: "sale", doc: sale, copies: 1 },
+        { id: "image", doc: imageDoc, copies: 1 },
+      ]).ok,
+    ).toBe(true);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(requested).toEqual([imageDoc.image]);
+    expect(popup.print).not.toHaveBeenCalled();
+    finishImage?.();
+    await vi.runAllTimersAsync();
+    expect(popup.print).toHaveBeenCalledOnce();
+  });
+
+  it("blocks the whole batch if a later product image fails", async () => {
+    vi.useFakeTimers();
+    const { popup, status } = popupWithFonts(async () => [{}]);
+    vi.stubGlobal(
+      "Image",
+      class {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(_value: string) {
+          this.onerror?.();
+        }
+      },
+    );
+    expect(
+      printBatch([
+        { id: "sale", doc: createDocument(templates[0]), copies: 1 },
+        { id: "image", doc: createDocument(templates[1]), copies: 1 },
+      ]).ok,
+    ).toBe(true);
+    await vi.runAllTimersAsync();
+    expect(popup.print).not.toHaveBeenCalled();
+    expect(status.textContent).toContain("書体または商品画像");
   });
 });

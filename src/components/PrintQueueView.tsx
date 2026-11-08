@@ -18,6 +18,7 @@ import {
 } from "../lib/model";
 import { buildPrintSheets, type PrintEntry } from "../lib/print";
 import PrintSheetPreview from "./PrintSheetPreview";
+import CopiesInput from "./CopiesInput";
 
 type QueueChange = Partial<Pick<PrintEntry, "copies">> & { paper?: Paper };
 
@@ -161,25 +162,10 @@ export default function PrintQueueView({
                     </label>
                     <label className="queue-copies-field">
                       <span>POPの枚数</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        step={1}
-                        inputMode="numeric"
+                      <CopiesInput
                         aria-label={`${entry.doc.productName}のPOPの枚数`}
                         value={entry.copies}
-                        onChange={(event) =>
-                          onChange(entry.id, {
-                            copies: Math.min(
-                              20,
-                              Math.max(
-                                1,
-                                Math.floor(Number(event.target.value) || 1),
-                              ),
-                            ),
-                          })
-                        }
+                        onChange={(copies) => onChange(entry.id, { copies })}
                       />
                     </label>
                     <div className="queue-row-actions">

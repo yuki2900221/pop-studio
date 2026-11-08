@@ -46,6 +46,7 @@ import {
 import PopArtwork from "./components/PopArtwork";
 import PaperSelect, { paperLabels } from "./components/PaperSelect";
 import PrintQueueView from "./components/PrintQueueView";
+import CopiesInput from "./components/CopiesInput";
 import PrintSheetPreview from "./components/PrintSheetPreview";
 import "./print-queue.css";
 import {
@@ -83,7 +84,14 @@ import {
 
 type View = "templates" | "saved" | "editor" | "queue";
 type Modal =
-  "print" | "ai" | "settings" | "help" | "templates" | "delete" | null;
+  | "print"
+  | "ai"
+  | "settings"
+  | "help"
+  | "templates"
+  | "delete"
+  | "discard"
+  | null;
 const palette = [
   "#285b45",
   "#bc4432",
@@ -185,6 +193,7 @@ export default function App() {
     [doc, setDoc] = useState<PopDocument>(() => createDocument(templates[0]));
   const [queue, setQueue] = useState<PrintEntry[]>([]);
   const [queueDraftId, setQueueDraftId] = useState<string | null>(null);
+  const [pendingLeave, setPendingLeave] = useState<View | null>(null);
   const queueRef = useRef(queue);
   queueRef.current = queue;
   const productNameRef = useRef<HTMLInputElement>(null);
@@ -416,6 +425,7 @@ export default function App() {
     };
     setDoc(next);
     setQueueDraftId(null);
+    setCopies(1);
     setHistory([]);
     setFuture([]);
     setDirty(false);
@@ -424,15 +434,18 @@ export default function App() {
     setQuery("");
     setModal(null);
   };
+  /** Opening another product never inherits the previous product's print count. */
   const openDoc = (d: PopDocument) => {
     workspaceRef.current = {
       ...workspaceRef.current,
       doc: { ...d },
       dirty: false,
       view: "editor",
+      copies: 1,
     };
     setDoc({ ...d });
     setQueueDraftId(null);
+    setCopies(1);
     setHistory([]);
     setFuture([]);
     setDirty(false);
@@ -543,9 +556,10 @@ export default function App() {
         setDirty(false);
         workspaceRef.current = { ...workspaceRef.current, dirty: false };
       } catch {
-        notify(
-          "印刷待ちを更新するため、商品名と正しい本体価格を入力してください",
-        );
+        // Incomplete edits cannot replace the queued snapshot; let the user
+        // choose between finishing them and discarding them.
+        setPendingLeave(next);
+        setModal("discard");
         return;
       }
     } else if (view === "editor" && dirty) {
@@ -564,6 +578,31 @@ export default function App() {
     }
     setView(next);
     setQuery("");
+  };
+  /** Restore the queued snapshot, so returning to the editor shows what will print. */
+  const discardQueuedEdits = () => {
+    const queued = queueRef.current.find((entry) => entry.id === queueDraftId);
+    const target = pendingLeave;
+    setPendingLeave(null);
+    setModal(null);
+    if (queued) {
+      const restored = { ...queued.doc };
+      setDoc(restored);
+      setCopies(queued.copies);
+      workspaceRef.current = {
+        ...workspaceRef.current,
+        doc: restored,
+        copies: queued.copies,
+        dirty: false,
+      };
+    }
+    setHistory([]);
+    setFuture([]);
+    setDirty(false);
+    if (target) {
+      setView(target);
+      setQuery("");
+    }
   };
   const duplicate = (d: PopDocument) => {
     const copy = {
@@ -1432,23 +1471,10 @@ export default function App() {
                         />
                       </Field>
                       <Field label="POPの枚数">
-                        <input
+                        <CopiesInput
                           aria-label="POPの枚数"
-                          type="number"
-                          min={1}
-                          max={20}
                           value={copies}
-                          onChange={(e) =>
-                            setCopies(
-                              Math.max(
-                                1,
-                                Math.min(
-                                  20,
-                                  Math.floor(Number(e.target.value) || 1),
-                                ),
-                              ),
-                            )
-                          }
+                          onChange={setCopies}
                         />
                       </Field>
                     </div>
@@ -1964,6 +1990,8 @@ export default function App() {
                     <CircleHelp size={20} />
                   ) : modal === "delete" ? (
                     <Trash2 size={20} />
+                  ) : modal === "discard" ? (
+                    <Undo2 size={20} />
                   ) : (
                     <Settings2 size={20} />
                   )}
@@ -1979,7 +2007,9 @@ export default function App() {
                           ? "使い方・ショートカット"
                           : modal === "delete"
                             ? "POPを削除"
-                            : "テンプレートを変更"}
+                            : modal === "discard"
+                              ? "印刷待ちの編集"
+                              : "テンプレートを変更"}
                 </h2>
                 <IconButton
                   label="閉じる"
@@ -2036,23 +2066,10 @@ export default function App() {
                       >
                         <Minus size={17} />
                       </IconButton>
-                      <input
+                      <CopiesInput
                         aria-label="印刷枚数"
-                        type="number"
-                        min={1}
-                        max={20}
                         value={copies}
-                        onChange={(e) =>
-                          setCopies(
-                            Math.max(
-                              1,
-                              Math.min(
-                                20,
-                                Math.floor(Number(e.target.value) || 1),
-                              ),
-                            ),
-                          )
-                        }
+                        onChange={setCopies}
                       />
                       <IconButton
                         label="印刷枚数を増やす"
@@ -2309,6 +2326,31 @@ export default function App() {
                     >
                       <Trash2 size={16} />
                       削除する
+                    </button>
+                  </div>
+                </>
+              )}
+              {modal === "discard" && (
+                <>
+                  <p className="modal-description">
+                    印刷待ちを更新するには、商品名と本体価格が必要です。変更を破棄すると、印刷待ちは編集前の内容のまま残ります。
+                  </p>
+                  <div className="modal-action-row">
+                    <button
+                      className="secondary-button"
+                      onClick={() => {
+                        setPendingLeave(null);
+                        setModal(null);
+                      }}
+                    >
+                      編集に戻る
+                    </button>
+                    <button
+                      className="danger-button"
+                      onClick={discardQueuedEdits}
+                    >
+                      <Undo2 size={16} />
+                      変更を破棄して移動
                     </button>
                   </div>
                 </>

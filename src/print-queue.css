@@ -28,8 +28,8 @@
   padding: 0 7px;
   border-radius: 9px;
   background: #eaf0eb;
-  color: #6d8677;
-  font-size: 12px;
+  color: #63796c;
+  font-size: 14px;
   font-weight: 500;
 }
 .queue-heading p {
@@ -37,8 +37,8 @@
   align-items: center;
   gap: 10px;
   margin: 12px 0 0;
-  color: #708078;
-  font-size: 11px;
+  color: #697870;
+  font-size: 13px;
 }
 .queue-heading p > i {
   width: 3px;
@@ -80,20 +80,20 @@
 }
 .queue-section-heading h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #45624f;
 }
 .queue-section-heading > span {
-  color: #7b8c80;
-  font-size: 10px;
+  color: #69786d;
+  font-size: 12px;
   white-space: nowrap;
 }
 .queue-storage-note {
   margin: 9px 0 20px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.8;
-  color: #7f8e84;
+  color: #6a786e;
 }
 .queue-list {
   display: flex;
@@ -120,15 +120,15 @@
   place-items: center;
   border-radius: 8px;
   background: #f0f4ef;
-  font-size: 10px;
-  color: #78907c;
+  font-size: 12px;
+  color: #657a68;
 }
 .queue-product {
   min-width: 0;
   flex: 1;
 }
 .queue-product h3 {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -136,10 +136,10 @@
   margin: 0;
 }
 .queue-product p {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
-  color: #7d8e81;
+  color: #69796d;
   margin: 4px 0 0;
 }
 .queue-price {
@@ -149,7 +149,7 @@
   color: #3c674b;
 }
 .queue-price small {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 400;
   margin-left: 3px;
 }
@@ -168,8 +168,8 @@
   min-width: 0;
 }
 .queue-row-controls label > span {
-  font-size: 9px;
-  color: #7e8e81;
+  font-size: 12px;
+  color: #69786c;
 }
 .queue-size-field {
   flex: 1;
@@ -182,7 +182,7 @@
   border: 1px solid #dfe7de;
   background: #f8fbf6;
   color: #466448;
-  font-size: 11px;
+  font-size: 13px;
   padding: 6px 10px;
 }
 .queue-copies-field input {
@@ -201,7 +201,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #718a76;
+  color: #637968;
 }
 .queue-icon-button:hover:not(:disabled) {
   background: #eaf1e9;
@@ -223,13 +223,13 @@
   margin: 22px 0 13px;
 }
 .queue-sheet-info > strong {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: #46644f;
 }
 .queue-sheet-info > span {
-  font-size: 9px;
-  color: #819083;
+  font-size: 12px;
+  color: #6a796c;
 }
 .queue-paper-stage {
   min-height: 120px;
@@ -277,14 +277,14 @@
   margin-top: 13px;
 }
 .queue-page-controls > span {
-  font-size: 10px;
-  color: #6c826f;
+  font-size: 12px;
+  color: #657a68;
   min-width: 90px;
   text-align: center;
 }
 .queue-preview-note {
-  color: #7e8e80;
-  font-size: 10px;
+  color: #6a796c;
+  font-size: 12px;
   line-height: 1.8;
   margin: 13px 0 18px;
 }
@@ -296,11 +296,11 @@
   border: 1px solid #e7eddf;
   border-radius: 9px;
   background: #f5f8ef;
-  color: #779065;
+  color: #667b56;
 }
 .queue-print-note p {
   margin: 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.8;
 }
 .queue-print-note > svg {
@@ -335,7 +335,7 @@
 }
 .queue-empty p {
   margin: 12px 0 26px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.9;
   color: #84947d;
 }
@@ -396,7 +396,7 @@
   }
   .queue-heading-actions > button {
     justify-content: center;
-    font-size: 10px;
+    font-size: 12px;
     padding: 10px 8px;
     min-height: 42px;
     gap: 6px;
@@ -424,13 +424,13 @@
     height: 23px;
   }
   .queue-product h3 {
-    font-size: 12px;
+    font-size: 14px;
   }
   .queue-product p {
-    font-size: 9px;
+    font-size: 12px;
   }
   .queue-price {
-    font-size: 15px;
+    font-size: 16px;
   }
   .queue-row-controls {
     gap: 8px;
@@ -438,7 +438,7 @@
   }
   .queue-row-controls select,
   .queue-row-controls input {
-    font-size: 11px;
+    font-size: 13px;
     padding: 6px 8px;
   }
   .queue-copies-field input {
@@ -458,6 +458,6 @@
   .queue-storage-note,
   .queue-preview-note,
   .queue-print-note p {
-    font-size: 9px;
+    font-size: 12px;
   }
 }

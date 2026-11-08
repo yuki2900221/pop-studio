@@ -28,7 +28,6 @@ import {
   LoaderCircle,
   Maximize,
   Minus,
-  MoreHorizontal,
   Plus,
   Printer,
   Redo2,
@@ -961,7 +960,6 @@ export default function App() {
                 POP STUDIO <b>1.0</b>
               </span>
             </div>
-            <MoreHorizontal size={18} />
           </div>
         </div>
       </aside>
@@ -1454,77 +1452,6 @@ export default function App() {
                   </div>
                 </section>
                 <aside className="properties-panel">
-                  <div className="continuous-entry">
-                    <div className="continuous-entry-fields">
-                      <Field label="POPサイズ">
-                        <PaperSelect
-                          value={doc.paper}
-                          legacy={doc.theme !== "sale"}
-                          onChange={(paper) =>
-                            patch({
-                              paper,
-                              ...(isB5Paper(paper)
-                                ? { orientation: "landscape" as const }
-                                : {}),
-                            })
-                          }
-                        />
-                      </Field>
-                      <Field label="POPの枚数">
-                        <CopiesInput
-                          aria-label="POPの枚数"
-                          value={copies}
-                          onChange={setCopies}
-                        />
-                      </Field>
-                    </div>
-                    {isB5Paper(doc.paper) ? (
-                      <p className="field-hint">
-                        B5用紙・
-                        {b5Layouts[doc.paper].orientation === "landscape"
-                          ? "横"
-                          : "縦"}
-                        に
-                        {b5Layouts[doc.paper].columns *
-                          b5Layouts[doc.paper].rows}
-                        枚を配置
-                      </p>
-                    ) : doc.theme === "sale" ? (
-                      <p className="field-hint">
-                        以前のサイズです。印刷待ちにはB5のサイズを選んでください。
-                      </p>
-                    ) : null}
-                    <button
-                      className="primary-button full-width"
-                      disabled={
-                        !validPrint ||
-                        (doc.theme === "sale" && !isB5Paper(doc.paper))
-                      }
-                      onClick={() => enqueue(true)}
-                    >
-                      <Plus size={16} />
-                      {queueDraftId ? "更新して次の商品" : "追加して次の商品"}
-                      <ArrowRight size={16} />
-                    </button>
-                    <button
-                      className="secondary-button full-width"
-                      disabled={
-                        !validPrint ||
-                        (doc.theme === "sale" && !isB5Paper(doc.paper))
-                      }
-                      onClick={() => enqueue(false)}
-                    >
-                      <Printer size={16} />
-                      {queueDraftId ? "印刷待ちを更新" : "印刷待ちに追加"}
-                    </button>
-                    <button
-                      className="text-button continuous-queue-link"
-                      onClick={() => leave("queue")}
-                    >
-                      印刷待ちを確認（{queuePopCount}枚）
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
                   <div
                     className="panel-tabs"
                     role="tablist"
@@ -1551,24 +1478,21 @@ export default function App() {
                     <AnimatePresence mode="wait">
                       {panel === "product" ? (
                         <motion.div key="product" {...fade}>
-                          <button
-                            className="ai-assist-button"
-                            onClick={() => {
-                              setAiError("");
-                              setAiResult(null);
-                              setModal("ai");
-                            }}
-                          >
-                            <span>
-                              <Sparkles size={17} />
-                              AIで商品情報を入力
-                            </span>
-                            <ChevronRight size={15} />
-                          </button>
                           <div className="form-section">
                             <div className="form-section-title">
                               <span className="number-dot">1</span>
-                              <h2>商品について</h2>
+                              <h2>商品と価格</h2>
+                              <button
+                                className="ai-assist-button"
+                                onClick={() => {
+                                  setAiError("");
+                                  setAiResult(null);
+                                  setModal("ai");
+                                }}
+                              >
+                                <Sparkles size={15} />
+                                AIで入力
+                              </button>
                             </div>
                             <Field label="商品名">
                               <input
@@ -1587,71 +1511,33 @@ export default function App() {
                                 }
                               />
                             </Field>
-                            <Field label="産地・メーカー">
-                              <input
-                                value={doc.origin}
-                                maxLength={40}
-                                placeholder="例：愛媛県産"
-                                onChange={(e) =>
-                                  patch({ origin: e.target.value })
+                            <div className="field-pair">
+                              <Field label="産地・メーカー">
+                                <input
+                                  value={doc.origin}
+                                  maxLength={40}
+                                  placeholder="例：愛媛県産"
+                                  onChange={(e) =>
+                                    patch({ origin: e.target.value })
+                                  }
+                                />
+                              </Field>
+                              <Field
+                                label={
+                                  doc.theme === "sale"
+                                    ? "サイズ・容量"
+                                    : "内容量・単位"
                                 }
-                              />
-                            </Field>
-                            <Field
-                              label={
-                                doc.theme === "sale"
-                                  ? "サイズ・容量"
-                                  : "内容量・単位"
-                              }
-                            >
-                              <input
-                                value={doc.unit}
-                                maxLength={30}
-                                placeholder="例：1袋（約500g）"
-                                onChange={(e) =>
-                                  patch({ unit: e.target.value })
-                                }
-                              />
-                            </Field>
-                            {doc.theme === "sale" && (
-                              <>
-                                <Field label="メモ1（青文字・価格の上）">
-                                  <input
-                                    value={doc.memo1 ?? ""}
-                                    maxLength={40}
-                                    placeholder="空欄で非表示"
-                                    onChange={(e) =>
-                                      patch({ memo1: e.target.value })
-                                    }
-                                  />
-                                </Field>
-                                <Field label="メモ2（黒文字・左側）">
-                                  <input
-                                    value={doc.memo2 ?? ""}
-                                    maxLength={40}
-                                    placeholder="空欄で非表示"
-                                    onChange={(e) =>
-                                      patch({ memo2: e.target.value })
-                                    }
-                                  />
-                                </Field>
-                              </>
-                            )}
-                            <Field label="見出しラベル">
-                              <input
-                                value={doc.badge}
-                                maxLength={16}
-                                placeholder="空欄で非表示"
-                                onChange={(e) =>
-                                  patch({ badge: e.target.value })
-                                }
-                              />
-                            </Field>
-                          </div>
-                          <div className="form-section">
-                            <div className="form-section-title">
-                              <span className="number-dot">2</span>
-                              <h2>価格</h2>
+                              >
+                                <input
+                                  value={doc.unit}
+                                  maxLength={30}
+                                  placeholder="例：1袋（約500g）"
+                                  onChange={(e) =>
+                                    patch({ unit: e.target.value })
+                                  }
+                                />
+                              </Field>
                             </div>
                             <Field label="本体価格（税抜）">
                               <div
@@ -1703,6 +1589,46 @@ export default function App() {
                                 <small>円</small>
                               </strong>
                             </div>
+                          </div>
+                          <div className="form-section">
+                            <div className="form-section-title">
+                              <span className="number-dot">2</span>
+                              <h2>メモ・見出し</h2>
+                            </div>
+                            {doc.theme === "sale" && (
+                              <>
+                                <Field label="メモ1（青文字・価格の上）">
+                                  <input
+                                    value={doc.memo1 ?? ""}
+                                    maxLength={40}
+                                    placeholder="空欄で非表示"
+                                    onChange={(e) =>
+                                      patch({ memo1: e.target.value })
+                                    }
+                                  />
+                                </Field>
+                                <Field label="メモ2（黒文字・左側）">
+                                  <input
+                                    value={doc.memo2 ?? ""}
+                                    maxLength={40}
+                                    placeholder="空欄で非表示"
+                                    onChange={(e) =>
+                                      patch({ memo2: e.target.value })
+                                    }
+                                  />
+                                </Field>
+                              </>
+                            )}
+                            <Field label="見出しラベル">
+                              <input
+                                value={doc.badge}
+                                maxLength={16}
+                                placeholder="空欄で非表示"
+                                onChange={(e) =>
+                                  patch({ badge: e.target.value })
+                                }
+                              />
+                            </Field>
                           </div>
                           {doc.theme !== "sale" && (
                             <>
@@ -1913,9 +1839,69 @@ export default function App() {
                       )}
                     </AnimatePresence>
                   </div>
-                  <div className="panel-bottom">
-                    <span className="green-dot" />
-                    変更はプレビューに即時反映
+                  {/* Fixed footer: the primary queue action stays reachable while the fields scroll. */}
+                  <div className="continuous-entry">
+                    <div className="continuous-entry-fields">
+                      <Field label="POPサイズ">
+                        <PaperSelect
+                          value={doc.paper}
+                          legacy={doc.theme !== "sale"}
+                          onChange={(paper) =>
+                            patch({
+                              paper,
+                              ...(isB5Paper(paper)
+                                ? { orientation: "landscape" as const }
+                                : {}),
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="POPの枚数">
+                        <CopiesInput
+                          aria-label="POPの枚数"
+                          value={copies}
+                          onChange={setCopies}
+                        />
+                      </Field>
+                    </div>
+                    {doc.theme === "sale" && !isB5Paper(doc.paper) ? (
+                      <p className="field-hint">
+                        以前のサイズです。印刷待ちにはB5のサイズを選んでください。
+                      </p>
+                    ) : null}
+                    <button
+                      className="primary-button full-width"
+                      disabled={
+                        !validPrint ||
+                        (doc.theme === "sale" && !isB5Paper(doc.paper))
+                      }
+                      onClick={() => enqueue(true)}
+                    >
+                      <Plus size={16} />
+                      {queueDraftId ? "更新して次の商品" : "追加して次の商品"}
+                      <ArrowRight size={16} />
+                    </button>
+                    <div className="continuous-entry-secondary">
+                      <button
+                        className="text-button"
+                        title="印刷待ちに追加し、この商品の編集を続けます"
+                        disabled={
+                          !validPrint ||
+                          (doc.theme === "sale" && !isB5Paper(doc.paper))
+                        }
+                        onClick={() => enqueue(false)}
+                      >
+                        <Printer size={15} />
+                        {queueDraftId ? "更新のみ" : "追加のみ"}
+                      </button>
+                      <button
+                        className="text-button continuous-queue-link"
+                        onClick={() => leave("queue")}
+                      >
+                        印刷待ち {queuePopCount}枚
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 </aside>
               </div>

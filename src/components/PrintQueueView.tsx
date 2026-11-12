@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -214,18 +214,13 @@ export default function PrintQueueView({
                 </span>
               </div>
               <div className="queue-paper-stage">
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.div
-                    key={currentPage}
-                    className={`queue-paper-wrap ${sheet.orientation === "portrait" ? "queue-paper-portrait" : ""}`}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    transition={{ duration: 0.13 }}
-                  >
-                    <PrintSheetPreview sheet={sheet} />
-                  </motion.div>
-                </AnimatePresence>
+                {/* Swap sheets immediately: a fade-out/fade-in ("wait") left the
+                    stage empty between pages, for longer on slow or busy PCs. */}
+                <div
+                  className={`queue-paper-wrap ${sheet.orientation === "portrait" ? "queue-paper-portrait" : ""}`}
+                >
+                  <PrintSheetPreview sheet={sheet} />
+                </div>
               </div>
               <div className="queue-page-controls">
                 <button

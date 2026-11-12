@@ -185,6 +185,13 @@ function Skeleton() {
   );
 }
 
+/** Untitled products take their name from the product so lists stay distinguishable. */
+function withProductName(doc: PopDocument): PopDocument {
+  const product = doc.productName.trim();
+  return doc.name === "新しいPOP" && product
+    ? { ...doc, name: `${product}のPOP`.slice(0, 100) }
+    : doc;
+}
 export default function App() {
   const [loading, setLoading] = useState(true),
     [view, setView] = useState<View>("templates"),
@@ -257,7 +264,7 @@ export default function App() {
       } finally {
         setLoading(false);
       }
-    }, 650);
+    }, 0);
     return () => {
       clearTimeout(timer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -362,7 +369,10 @@ export default function App() {
       notify("本体価格を0〜1,000,000円の整数で入力してください");
       return;
     }
-    const next = { ...doc, updatedAt: new Date().toISOString() };
+    const next = {
+      ...withProductName(doc),
+      updatedAt: new Date().toISOString(),
+    };
     const existing = docs.some((d) => d.id === doc.id);
     const nextDocs = existing
       ? docs.map((d) => (d.id === doc.id ? next : d))
@@ -375,7 +385,7 @@ export default function App() {
     setDocs(nextDocs);
     setDoc(next);
     setDirty(false);
-    notify("この端末に保存しました");
+    notify("下書きを保存しました");
   }, [doc, docs, notify]);
   useEffect(() => {
     function shortcuts(e: KeyboardEvent) {
@@ -475,10 +485,7 @@ export default function App() {
       return;
     }
     try {
-      const snapshot = {
-        ...doc,
-        name: doc.name === "新しいPOP" ? `${doc.productName}のPOP` : doc.name,
-      };
+      const snapshot = withProductName(doc);
       const entry = makeQueueEntry(snapshot, copies);
       const current = queueRef.current;
       const replacing =
@@ -562,11 +569,12 @@ export default function App() {
         return;
       }
     } else if (view === "editor" && dirty) {
+      const draft = withProductName(doc);
       const result = saveDocuments(
         window.localStorage,
         docs.some((d) => d.id === doc.id)
-          ? docs.map((d) => (d.id === doc.id ? doc : d))
-          : [doc, ...docs],
+          ? docs.map((d) => (d.id === doc.id ? draft : d))
+          : [draft, ...docs],
       );
       if (!result.ok) {
         notify("未保存の変更があります。先に書き出してください");
@@ -574,6 +582,8 @@ export default function App() {
       }
       setDocs(loadDocuments(window.localStorage));
       setDirty(false);
+      // Leaving saves silently otherwise; say where the edits went.
+      notify("編集中のPOPを下書きに保存しました");
     }
     setView(next);
     setQuery("");
@@ -796,7 +806,13 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ task: "extract", text: aiText }),
         signal: controller.signal,
+        // An expired Access session answers with a redirect to the login page.
+        redirect: "manual",
       });
+      if (r.type === "opaqueredirect" || r.status === 401)
+        throw Error(
+          "ログインの有効期限が切れました。ページを再読み込みしてログインし直してください",
+        );
       const data = await r.json();
       if (!r.ok) throw Error(data.error || "AIを利用できませんでした");
       if (
@@ -849,6 +865,8 @@ export default function App() {
     !!doc.productName.trim() &&
     /^\d{1,7}$/.test(doc.price) &&
     Number(doc.price) <= 1000000;
+  const canEnqueue =
+    validPrint && !(doc.theme === "sale" && !isB5Paper(doc.paper));
   const dimensions = paperDimensions(doc);
   const singleSheets = validPrint
     ? buildPrintSheets([{ id: "current", doc, copies }])
@@ -953,11 +971,10 @@ export default function App() {
             <ChevronRight size={14} />
           </button>
           <div className="sidebar-footer">
-            <span className="app-avatar">P</span>
             <div>
-              <strong>ローカルワークスペース</strong>
+              <strong>POP STUDIO</strong>
               <span>
-                POP STUDIO <b>1.0</b>
+                バージョン <b>1.0</b>
               </span>
             </div>
           </div>
@@ -991,7 +1008,6 @@ export default function App() {
             >
               <CircleHelp size={19} />
             </button>
-            <span className="user-avatar">P</span>
           </div>
         </header>
         <AnimatePresence mode="wait">
@@ -1034,10 +1050,6 @@ export default function App() {
             <motion.main key={view} className="library-main" {...fade}>
               <div className="page-heading">
                 <div>
-                  <div className="eyebrow">
-                    <span className="small-square" />
-                    {view === "saved" ? "MY COLLECTION" : "DESIGN LIBRARY"}
-                  </div>
                   <h1>
                     {view === "saved" ? "保存したPOP" : "テンプレート"}
                     <span className="heading-count">
@@ -1333,7 +1345,7 @@ export default function App() {
                         : queueDraftId
                           ? "印刷待ちに保存済み"
                           : docs.some((d) => d.id === doc.id)
-                            ? "この端末に保存済み"
+                            ? "下書き保存済み"
                             : "新しいPOP"}
                       <span className="title-separator">·</span>
                       {paperLabels[doc.paper]}{" "}
@@ -1362,16 +1374,21 @@ export default function App() {
                       <Redo2 size={18} />
                     </IconButton>
                   </div>
-                  <button className="secondary-button" onClick={save}>
+                  <button
+                    className="secondary-button"
+                    onClick={save}
+                    title="この端末の「保存したPOP」に残します (Ctrl+S)"
+                  >
                     <Check size={17} />
-                    保存
+                    下書き保存
                   </button>
                   <button
-                    className="primary-button"
+                    className="secondary-button"
                     onClick={() => setModal("print")}
+                    title="印刷待ちに入れず、この商品だけを印刷します (Ctrl+P)"
                   >
                     <Printer size={17} />
-                    印刷・PDF保存
+                    この商品を印刷
                   </button>
                 </div>
               </div>
@@ -1549,6 +1566,18 @@ export default function App() {
                                   inputMode="numeric"
                                   value={doc.price}
                                   maxLength={7}
+                                  enterKeyHint="next"
+                                  onKeyDown={(e) => {
+                                    // Enter on the last required field finishes this product.
+                                    if (
+                                      e.key !== "Enter" ||
+                                      e.nativeEvent.isComposing ||
+                                      !canEnqueue
+                                    )
+                                      return;
+                                    e.preventDefault();
+                                    enqueue(true);
+                                  }}
                                   onChange={(e) =>
                                     patch({
                                       price: e.target.value.replace(
@@ -1674,21 +1703,9 @@ export default function App() {
                               <SlidersHorizontal size={16} />
                               <h2>用紙とレイアウト</h2>
                             </div>
-                            <Field label="用紙サイズ">
-                              <PaperSelect
-                                label="デザインのPOPサイズ"
-                                value={doc.paper}
-                                legacy={doc.theme !== "sale"}
-                                onChange={(paper) =>
-                                  patch({
-                                    paper,
-                                    ...(isB5Paper(paper)
-                                      ? { orientation: "landscape" as const }
-                                      : {}),
-                                  })
-                                }
-                              />
-                            </Field>
+                            <p className="field-hint">
+                              POPサイズは下の「POPサイズ」で変更します。
+                            </p>
                             {doc.theme === "sale" && (
                               <p className="field-hint sale-format-note">
                                 POPは横向きです。印刷用紙の向きと面付けはサイズに合わせます。
@@ -1871,10 +1888,7 @@ export default function App() {
                     ) : null}
                     <button
                       className="primary-button full-width"
-                      disabled={
-                        !validPrint ||
-                        (doc.theme === "sale" && !isB5Paper(doc.paper))
-                      }
+                      disabled={!canEnqueue}
                       onClick={() => enqueue(true)}
                     >
                       <Plus size={16} />
@@ -1885,10 +1899,7 @@ export default function App() {
                       <button
                         className="text-button"
                         title="印刷待ちに追加し、この商品の編集を続けます"
-                        disabled={
-                          !validPrint ||
-                          (doc.theme === "sale" && !isB5Paper(doc.paper))
-                        }
+                        disabled={!canEnqueue}
                         onClick={() => enqueue(false)}
                       >
                         <Printer size={15} />
@@ -2237,7 +2248,8 @@ export default function App() {
                   </div>
                   <div className="shortcut-list">
                     {[
-                      ["保存", "Ctrl + S"],
+                      ["追加して次の商品", "本体価格で Enter"],
+                      ["下書き保存", "Ctrl + S"],
                       ["元に戻す", "Ctrl + Z"],
                       ["やり直す", "Ctrl + Shift + Z"],
                       ["印刷", "Ctrl + P"],

@@ -325,17 +325,6 @@ button svg {
 .sidebar-footer > svg {
   color: #6b776f;
 }
-.app-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: #ebede7;
-  color: #6d7a69;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  font-weight: 700;
-}
 .main-shell {
   margin-left: 224px;
   flex: 1;
@@ -388,19 +377,6 @@ button svg {
   padding: 3px;
   color: #6b786f;
 }
-.user-avatar {
-  height: 30px;
-  width: 30px;
-  border-radius: 50%;
-  background: linear-gradient(140deg, #e5ecdc, #f3ede2);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 5px #36503c0b;
-  display: grid;
-  place-items: center;
-  color: #6e795e;
-  font-size: 13px;
-  font-weight: 600;
-}
 .library-main {
   padding: 38px 38px 20px;
   max-width: 1660px;
@@ -412,23 +388,6 @@ button svg {
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 31px;
-}
-.eyebrow {
-  font-size: 12px;
-  color: #6c7864;
-  font-weight: 600;
-  letter-spacing: 1.6px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 11px;
-}
-.small-square {
-  height: 5px;
-  width: 5px;
-  background: #93ae8b;
-  display: inline-block;
-  border-radius: 1px;
 }
 h1,
 h2,
@@ -2198,9 +2157,6 @@ p {
   .sidebar-footer > div,
   .sidebar-footer > svg,
   .help-link,
-  .sidebar-footer .app-avatar {
-    display: none;
-  }
   .brand-mark {
     width: 34px;
     height: 34px;
@@ -2473,16 +2429,8 @@ p {
   .topbar-help {
     display: none;
   }
-  .user-avatar {
-    height: 26px;
-    width: 26px;
-  }
   .library-main {
     padding: 25px 16px 16px;
-  }
-  .eyebrow {
-    font-size: 12px;
-    letter-spacing: 1.1px;
   }
   .page-heading h1 {
     font-size: 21px;

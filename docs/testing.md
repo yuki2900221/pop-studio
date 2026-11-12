@@ -1,5 +1,26 @@
 # 検証記録
 
+## Cloudflare Accessによるアクセス制限（2026-11-12）
+
+- 利用者の指示により、Google Cloudプロジェクト`pop-studio-login`にOAuthクライアントを作成し、Cloudflare Zero TrustへGoogleログインを登録。Worker「pop-studio-yamadaya」の本番・プレビューにAccessを適用し、店舗用アカウント1件とGoogleログインを必須とする再利用ポリシーを設定。ログイン方法はGoogleのみ、セッションは24時間。
+- 利用規約・ポリシーへの同意、Googleへのサインイン、クライアントシークレットの入力、Google同意画面の承認は利用者本人が実施。
+- 未ログインの`curl`で`/`、`/api/health`、`/assets/`、`POST /api/ai/assist`がすべてAccessのログイン画面へ302転送されることを確認。
+- 許可していないGoogleアカウントでのログインは「That account does not have access」で拒否されることを確認。
+- 許可したアカウントでGoogleログインし、アプリが表示されること、`/cdn-cgi/access/get-identity`のIdPが`google`であること、`/api/health`が200で`ai: true`を返すことを確認。
+- 作成直後のGoogle OAuthクライアントは、Google側で約1日エラー500を返した（設定の反映待ち）。翌日には解消。
+- Worker側の二重チェックを、最初は`ctx.access`の有無で実装して公開（Version `c0a32d1e`）。許可したアカウントでログイン済みでも`/api/health`が401になり、AI機能が使えなくなった。Static Assetsを使うWorkerでは`ctx.access`が渡されないのが原因。利用者の承認を得て`wrangler rollback`で前の版（`891bec79`）へ戻し、ログイン中の`/api/health`が200、未ログインは302のままであることを確認。
+- 二重チェックを`Cf-Access-Jwt-Assertion`の署名検証（RS256、発行元、AUD、有効期限、鍵の自動更新）に作り直した。自動テストで正しい署名・別アプリ・別チーム・期限切れ・未来の開始時刻・`alg`改ざん・未知の鍵・偽造署名・不正形式・設定欠落・鍵取得失敗を検証。`npm run check`（183件）・`npm run build`・`npm run format:check`が合格。
+- Accessのログイン転送URLに含まれる本物の署名付きトークンを、本番チームのJWKSで検証し、署名が有効なこと、改ざんすると拒否されること、AUDがWorkerのAccessアプリと一致することを確認。
+- 利用者の承認を得て作り直した版を公開（Version `642ee8f4-0368-4a0b-bf58-f1bc8254f5de`）。ログイン中のブラウザで`/api/health`が3回連続200、空の`POST /api/ai/assist`がJWT検証を通過して入力検証の400になることを確認（AIは実行していない）。未ログイン・偽の`Cf-Access-Jwt-Assertion`ヘッダー付きの`curl`はAccessで302転送のまま。Accessを外した状態での401応答は本番では試しておらず、自動テストでのみ確認。
+- Windows実機・Edgeでのログインと、Accessセッション切れ後のAI呼び出しの表示は未検証。
+
+## 公開環境への反映（2026-11-11）
+
+- 利用者の指示により、`2244be2`までの6コミット（店舗特売書式、価格書体、B5面付け・連続入力、枚数入力の修正、編集パネル・読みやすさの改善）をGitHubへpushし、`npm run deploy`でCloudflare Workersへ公開。Version ID `891bec79-633e-423b-9818-551275ba7df9`。
+- push後のGitHub Actions（型検査・自動テスト・ビルド・依存監査）は[成功](https://github.com/yuki2900221/pop-studio/actions/runs/42988039418)。
+- 公開環境をmacOS版Chrome・1366 × 768で確認。新しいCSS・JSが配信され、`/api/health`は`ai: true`。店舗書式の編集画面で、同梱書体の読込、商品名〜本体価格がスクロールなしで表示されること、下部固定の操作欄を確認。本番CSP下でブラウザのエラーは0件。
+- 課金プラン、bindings、利用上限の設定は変更していない。公開URLはログインなしで誰でも開ける状態のまま。公開環境でのAI実行、Windows実機・Edge、実プリンターは未検証。
+
 ## 編集パネルの入力順・文字の読みやすさ（2026-11-08）
 
 - 編集パネルを「商品名 → 産地・容量（横並び）→ 本体価格 → 税率」の順に変更し、メモ・見出しはその下へ移動。AIボタンは見出し横の小さなボタンにした。POPサイズ・枚数・「追加して次の商品」はパネル下部に固定し、入力欄だけがスクロールする。

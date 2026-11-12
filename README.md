@@ -21,7 +21,9 @@
 - Workers AIによる商品メモからの商品情報抽出。結果を確認してから編集内容へ反映。
 - 全画面スケルトン、画面・パネル・ダイアログのアニメーション、モーション軽減設定への対応。
 
-アカウント登録は不要です。下書き・印刷待ち・アップロード画像は、そのブラウザのlocalStorageに保存します。端末間同期や店舗間共有はありません。下書きのバックアップ・別端末への移動にはJSONを書き出してください。印刷待ち一覧のJSON一括書き出しは未対応です。ブラウザのデータ削除で下書き・印刷待ちも失われます。
+公開版はCloudflare Accessで保護しており、許可した店舗用のGoogleアカウントでログインした場合だけ開けます。許可するアカウントの追加・変更は、Cloudflareの「Zero Trust → Access controls → Policies」の「POP STUDIO - store account (Google)」で行います。ログインはGoogleのみで、セッションは24時間です。アプリ内のアカウント登録はありません。
+
+下書き・印刷待ち・アップロード画像は、そのブラウザのlocalStorageに保存します。端末間同期や店舗間共有はありません。下書きのバックアップ・別端末への移動にはJSONを書き出してください。印刷待ち一覧のJSON一括書き出しは未対応です。ブラウザのデータ削除で下書き・印刷待ちも失われます。
 
 AIボタンを実行した場合に限り、入力した商品メモをCloudflare Workers AIへ送信します。商品画像や保存済みPOPの一覧をAIへ送信する構成ではありません。価格・産地・内容量などが書かれていない場合は推測せず、未入力として扱います。抽出結果は必ず確認してください。
 
@@ -59,6 +61,8 @@ Viteの開発画面が起動します。`/api`は`http://127.0.0.1:8787`のWorke
 npm run build
 npx wrangler dev --ip 127.0.0.1 --port 8787
 ```
+
+本番の`wrangler.jsonc`は`ACCESS_REQUIRED=true`で、Cloudflare Accessを通過していないリクエストに`/api/*`が401を返します。ローカルの`wrangler dev`ではAccessを通らないため、Gitに含めない`.dev.vars`に`ACCESS_REQUIRED=false`を書いてから起動してください。
 
 `wrangler.jsonc`のAI bindingは`remote: true`です。AI実行にはCloudflareへの認証と利用権限が必要で、ローカル画面からの実行でもCloudflare側の利用枠を消費します。`wrangler dev --remote`もリモート環境・利用枠を使用するため、UIだけを確認する目的では使わないでください。`--local`を指定しても、リモートAI bindingの推論が無料のローカル模擬処理になるわけではありません。
 

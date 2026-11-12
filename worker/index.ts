@@ -1,5 +1,6 @@
 /** Cloudflare Worker: static application + explicitly requested product extraction. */
 import { AI_MODEL } from "./ai-config";
+import { verifyAccessJwt } from "./access";
 const MAX_BODY_BYTES = 8192;
 const AI_TIMEOUT_MS = 20_000;
 
@@ -16,6 +17,12 @@ export interface Env {
   AI_RATE_LIMITER?: {
     limit(options: { key: string }): Promise<{ success: boolean }>;
   };
+  /** "true" in production: the API refuses requests that did not pass Cloudflare Access. */
+  ACCESS_REQUIRED?: string;
+  /** https://<team>.cloudflareaccess.com — issuer of the Access JWT. */
+  ACCESS_TEAM_DOMAIN?: string;
+  /** AUD tag of the Access application protecting this Worker. */
+  ACCESS_AUD?: string;
 }
 
 const securityHeaders: Record<string, string> = {
@@ -278,6 +285,23 @@ async function assist(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const path = new URL(request.url).pathname;
+    // Second line of defence: if Access is ever detached from this Worker,
+    // the AI API fails closed instead of becoming public again. `ctx.access`
+    // is not forwarded behind Static Assets, so verify the signed assertion.
+    if (path.startsWith("/api/") && env.ACCESS_REQUIRED === "true") {
+      const identity = await verifyAccessJwt(
+        request.headers.get("Cf-Access-Jwt-Assertion"),
+        {
+          teamDomain: env.ACCESS_TEAM_DOMAIN ?? "",
+          aud: env.ACCESS_AUD ?? "",
+        },
+      );
+      if (!identity)
+        return error(
+          "ログインが必要です。ページを再読み込みしてください。",
+          401,
+        );
+    }
     if (path === "/api/health") {
       return request.method === "GET"
         ? json({ status: "ok", ai: Boolean(env.AI && env.AI_RATE_LIMITER) })

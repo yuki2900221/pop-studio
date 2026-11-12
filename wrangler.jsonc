@@ -18,4 +18,12 @@
     },
   ],
   "observability": { "enabled": true },
+  // Production requires Worker-level Cloudflare Access: /api/* verifies the
+  // Access JWT against this team domain and application AUD (public values).
+  // Override with ACCESS_REQUIRED=false in .dev.vars for local `wrangler dev`.
+  "vars": {
+    "ACCESS_REQUIRED": "true",
+    "ACCESS_TEAM_DOMAIN": "https://young-wildflower-2a69.cloudflareaccess.com",
+    "ACCESS_AUD": "4ba4eca85e33cbdbd366c1603a7b1208cd09c47a0fece43c0038e50b32b1a68c",
+  },
 }

@@ -17,6 +17,9 @@ import {
   buildPrintSheets,
   paperDimensions,
   printBatch,
+  printedDimensions,
+  PRINT_SAFE_MARGIN_MM,
+  sheetGeometry,
   type PrintEntry,
 } from "../src/lib/print";
 
@@ -98,7 +101,9 @@ describe("JIS B5 sizes and physical imposition", () => {
       sheets.flatMap((sheet) => sheet.documents.map((doc) => doc.productName)),
     ).toEqual(items.map((item) => item.doc.productName));
     const html = buildBatchPrintHtml(items);
-    expect(html.match(/<svg /g)).toHaveLength(capacity + 1);
+    expect(html.match(/<svg (?!class="cut-lines")/g)).toHaveLength(
+      capacity + 1,
+    );
     expect(html.match(/class="print-cell empty-cell"/g) ?? []).toHaveLength(
       capacity - 1,
     );
@@ -155,7 +160,10 @@ describe("JIS B5 sizes and physical imposition", () => {
       expect(html).toContain(`${svg}</div>`);
     }
     expect(html).toContain("POP 4枚・用紙4枚");
-    expect(html).toContain("left:91mm;top:192.75mm;width:91mm;height:64.25mm");
+    // Last 1/8 cell, scaled inside the 6mm printer-safe margin.
+    expect(html).toContain(
+      "left:91mm;top:188.514mm;width:85mm;height:60.014mm",
+    );
     expect(html).not.toContain("display: grid");
     expect(html).toContain(
       ".sheet + .sheet { page-break-before: always; break-before: page; }",
@@ -164,7 +172,7 @@ describe("JIS B5 sizes and physical imposition", () => {
 
   it("does not repeat a single small POP to fill its whole sheet", () => {
     const html = buildPrintHtml(entry("1枚だけ", "B5-eighth").doc, 1);
-    expect(html.match(/<svg /g)).toHaveLength(1);
+    expect(html.match(/<svg (?!class="cut-lines")/g)).toHaveLength(1);
     expect(html.match(/class="print-cell empty-cell"/g)).toHaveLength(7);
   });
 
@@ -182,6 +190,82 @@ describe("JIS B5 sizes and physical imposition", () => {
     expect(html).toContain("@page pop0 { size: 257mm 182mm; margin: 0; }");
     expect(html).toContain("@page pop4 { size: 182mm 257mm; margin: 0; }");
     expect(html).toContain("@media print { html, body { page: pop4;");
+  });
+});
+
+describe("printer-safe margin and cutting guides", () => {
+  it.each([
+    ["B5", 257, 182, 1, 1, 240.1, 170],
+    ["B5-half", 182, 257, 1, 2, 170, 120],
+    ["B5-quarter", 257, 182, 2, 2, 120, 85],
+    ["B5-eighth", 182, 257, 2, 4, 85, 60],
+  ] as const)(
+    "%s keeps every POP at least 6mm inside the sheet with the same aspect ratio",
+    (paper, width, height, columns, rows, printedWidth, printedHeight) => {
+      const geometry = sheetGeometry({ paper, width, height, columns, rows });
+      const design = paperDimensions({ paper, orientation: "landscape" });
+      for (const cell of geometry.cells) {
+        expect(cell.left).toBeGreaterThanOrEqual(PRINT_SAFE_MARGIN_MM);
+        expect(cell.top).toBeGreaterThanOrEqual(PRINT_SAFE_MARGIN_MM);
+        expect(cell.left + cell.width).toBeLessThanOrEqual(
+          width - PRINT_SAFE_MARGIN_MM + 0.001,
+        );
+        expect(cell.top + cell.height).toBeLessThanOrEqual(
+          height - PRINT_SAFE_MARGIN_MM + 0.001,
+        );
+        // Uniform scale: the shared SVG is shrunk, never stretched.
+        expect(cell.width / cell.height).toBeCloseTo(
+          design.width / design.height,
+          3,
+        );
+      }
+      expect(printedDimensions({ paper, orientation: "landscape" })).toEqual({
+        width: printedWidth,
+        height: printedHeight,
+      });
+      // One guide per cell edge, each running to the paper edge.
+      expect(geometry.cutLines).toHaveLength(columns + 1 + rows + 1);
+      for (const line of geometry.cutLines) {
+        const vertical = line.x1 === line.x2;
+        expect(vertical ? [line.y1, line.y2] : [line.x1, line.x2]).toEqual([
+          0,
+          vertical ? height : width,
+        ]);
+      }
+    },
+  );
+
+  it("prints dashed cutting guides above the artwork", () => {
+    const html = buildPrintHtml(entry("切り取り", "B5-quarter").doc, 4);
+    expect(html).toContain('<svg class="cut-lines" aria-hidden="true"');
+    expect(html).toContain('stroke-dasharray="2 1.5"');
+    expect(html.match(/<line /g)).toHaveLength(6);
+    expect(html.indexOf('class="cut-lines"')).toBeGreaterThan(
+      html.lastIndexOf('class="print-cell'),
+    );
+  });
+
+  it("leaves legacy A4/A5/shelf pages full-size without guides", () => {
+    for (const paper of ["A4", "A5", "shelf"] as const) {
+      const geometry = sheetGeometry({
+        paper,
+        width: 297,
+        height: 210,
+        columns: 1,
+        rows: 1,
+      });
+      expect(geometry.scale).toBe(1);
+      expect(geometry.cells[0]).toEqual({
+        left: 0,
+        top: 0,
+        width: 297,
+        height: 210,
+      });
+      expect(geometry.cutLines).toEqual([]);
+    }
+    expect(buildPrintHtml(entry("旧A4", "A4").doc)).not.toContain(
+      'class="cut-lines"',
+    );
   });
 });
 

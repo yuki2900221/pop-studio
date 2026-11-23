@@ -138,6 +138,107 @@ export function buildPrintSheets(entries: readonly PrintEntry[]): PrintSheet[] {
   return sheets;
 }
 
+/**
+ * Printers cannot print the outer few millimetres of a sheet, which clipped
+ * prices and tax lines at the right and bottom edges of B5 sheets. B5
+ * impositions are uniformly scaled to stay inside this band.
+ */
+export const PRINT_SAFE_MARGIN_MM = 6;
+
+export interface CellRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface CutLine {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface SheetGeometry {
+  /** Uniform scale applied to every POP (1 = full size, no margin). */
+  scale: number;
+  cells: CellRect[];
+  /** Dashed cutting guides along every cell edge, running to the sheet edge. */
+  cutLines: CutLine[];
+}
+
+const roundMm = (value: number) => Math.round(value * 1000) / 1000;
+
+/** Shared by the print HTML and the on-screen preview so both match exactly. */
+export function sheetGeometry(
+  sheet: Pick<PrintSheet, "paper" | "width" | "height" | "columns" | "rows">,
+): SheetGeometry {
+  const { width, height, columns, rows } = sheet;
+  // Legacy A4/A5/shelf pages keep their original full-page placement.
+  const margin = isB5Paper(sheet.paper) ? PRINT_SAFE_MARGIN_MM : 0;
+  const scale = Math.min(
+    (width - 2 * margin) / width,
+    (height - 2 * margin) / height,
+  );
+  const cellWidth = (width / columns) * scale;
+  const cellHeight = (height / rows) * scale;
+  const left = (width - cellWidth * columns) / 2;
+  const top = (height - cellHeight * rows) / 2;
+  const cells = Array.from({ length: columns * rows }, (_, slot) => ({
+    left: roundMm(left + (slot % columns) * cellWidth),
+    top: roundMm(top + Math.floor(slot / columns) * cellHeight),
+    width: roundMm(cellWidth),
+    height: roundMm(cellHeight),
+  }));
+  const cutLines: CutLine[] = margin
+    ? [
+        ...Array.from({ length: columns + 1 }, (_, i) => {
+          const x = roundMm(left + i * cellWidth);
+          return { x1: x, y1: 0, x2: x, y2: height };
+        }),
+        ...Array.from({ length: rows + 1 }, (_, j) => {
+          const y = roundMm(top + j * cellHeight);
+          return { x1: 0, y1: y, x2: width, y2: y };
+        }),
+      ]
+    : [];
+  return { scale, cells, cutLines };
+}
+
+/** Finished size of a POP after cutting, including the safe-margin scale. */
+export function printedDimensions(
+  doc: Pick<PopDocument, "paper" | "orientation">,
+): { width: number; height: number } {
+  const size = paperDimensions(doc);
+  if (!isB5Paper(doc.paper)) return size;
+  const { scale } = sheetGeometry({
+    paper: doc.paper,
+    width: b5Layouts[doc.paper].sheetWidth,
+    height: b5Layouts[doc.paper].sheetHeight,
+    columns: b5Layouts[doc.paper].columns,
+    rows: b5Layouts[doc.paper].rows,
+  });
+  return {
+    width: Math.round(size.width * scale * 10) / 10,
+    height: Math.round(size.height * scale * 10) / 10,
+  };
+}
+
+/** Light dashed guides drawn above the artwork; shared markup for print. */
+export function cutLinesSvg(
+  sheet: Pick<PrintSheet, "width" | "height">,
+  lines: readonly CutLine[],
+): string {
+  if (!lines.length) return "";
+  const paths = lines
+    .map(
+      (line) =>
+        `<line x1="${line.x1}" y1="${line.y1}" x2="${line.x2}" y2="${line.y2}"/>`,
+    )
+    .join("");
+  return `<svg class="cut-lines" aria-hidden="true" viewBox="0 0 ${sheet.width} ${sheet.height}" preserveAspectRatio="none"><g stroke="#8a9096" stroke-width="0.2" stroke-dasharray="2 1.5" fill="none">${paths}</g></svg>`;
+}
+
 /** Print the editor's exact SVG in each physical cell, including partially filled sheets. */
 export function buildBatchPrintHtml(entries: readonly PrintEntry[]): string {
   const sheets = buildPrintSheets(entries);
@@ -152,22 +253,19 @@ export function buildBatchPrintHtml(entries: readonly PrintEntry[]): string {
     .join("\n");
   const pages = sheets
     .map((sheet, index) => {
-      // Position each cell in exact millimetres outside the pagination flow.
-      const cells = Array.from(
-        { length: sheet.columns * sheet.rows },
-        (_, slot) => {
+      // Position each cell in exact millimetres outside the pagination flow,
+      // inside the printer-safe margin, with cutting guides on top.
+      const geometry = sheetGeometry(sheet);
+      const cells = geometry.cells
+        .map((cell, slot) => {
           const doc = sheet.documents[slot];
           const artwork = doc
             ? renderToStaticMarkup(createElement(PopArtwork, { doc }))
             : "";
-          const cellWidth = sheet.width / sheet.columns;
-          const cellHeight = sheet.height / sheet.rows;
-          const left = (slot % sheet.columns) * cellWidth;
-          const top = Math.floor(slot / sheet.columns) * cellHeight;
-          return `<div class="print-cell${doc ? "" : " empty-cell"}" style="left:${left}mm;top:${top}mm;width:${cellWidth}mm;height:${cellHeight}mm">${artwork}</div>`;
-        },
-      ).join("");
-      return `<article class="sheet" data-paper="${sheet.paper}" style="page:pop${index};width:${sheet.width}mm;height:${sheet.height}mm">${cells}</article>`;
+          return `<div class="print-cell${doc ? "" : " empty-cell"}" style="left:${cell.left}mm;top:${cell.top}mm;width:${cell.width}mm;height:${cell.height}mm">${artwork}</div>`;
+        })
+        .join("");
+      return `<article class="sheet" data-paper="${sheet.paper}" style="page:pop${index};width:${sheet.width}mm;height:${sheet.height}mm">${cells}${cutLinesSvg(sheet, geometry.cutLines)}</article>`;
     })
     .join("");
   // Keep the root in the last named page: Chromium otherwise emits a trailing
@@ -184,6 +282,7 @@ export function buildBatchPrintHtml(entries: readonly PrintEntry[]): string {
     .sheet + .sheet { page-break-before: always; break-before: page; }
     .print-cell { position: absolute; overflow: hidden; }
     .print-cell > svg { display: block; width: 100%; height: 100%; }
+    .cut-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
     @media print { html, body { page: pop${sheets.length - 1}; background: white; } .print-controls { display: none; } .sheet { margin: 0; } }
   </style></head><body><div class="print-controls"><span id="print-status">POP ${total}枚・用紙${sheets.length}枚・倍率100%で印刷</span><button id="print-action" type="button">印刷 / PDF保存</button></div>${pages}</body></html>`;
 }

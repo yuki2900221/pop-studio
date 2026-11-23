@@ -64,7 +64,7 @@ import {
 } from "./lib/model";
 import {
   buildPrintSheets,
-  paperDimensions,
+  printedDimensions,
   printBatch,
   printDocument,
   type PrintEntry,
@@ -867,7 +867,8 @@ export default function App() {
     Number(doc.price) <= 1000000;
   const canEnqueue =
     validPrint && !(doc.theme === "sale" && !isB5Paper(doc.paper));
-  const dimensions = paperDimensions(doc);
+  // Size after cutting, including the printer-safe margin scale.
+  const dimensions = printedDimensions(doc);
   const singleSheets = validPrint
     ? buildPrintSheets([{ id: "current", doc, copies }])
     : [];

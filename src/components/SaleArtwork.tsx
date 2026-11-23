@@ -5,6 +5,7 @@ import {
   PRICE_FONT_FAMILY,
   saleFontCss,
 } from "../lib/artwork-fonts";
+import { splitProductName } from "../lib/product-name";
 
 // Advance widths of the bundled Archivo Black font (1000 units/em).
 function numeralWidth(text: string, size: number) {
@@ -39,12 +40,9 @@ export default function SaleArtwork({
     offsetY = (height - 848 * scale) / 2;
   const red = doc.color;
   const amount = /^\d{1,7}$/.test(doc.price) ? Number(doc.price) : 0;
-  const name = doc.productName || "商品名称";
-  const chars = Array.from(name);
-  const split = chars.length > 10 ? Math.ceil(chars.length / 2) : 0;
-  const names = split
-    ? [chars.slice(0, split).join(""), chars.slice(split).join("")]
-    : [name];
+  const name = doc.productName.trim() || "商品名称";
+  // Break at a natural boundary or a staff-typed space, not mid-word.
+  const names = splitProductName(name);
   const hasDescenders = /[gjpqy_]/.test(name);
   const requestedNameSize = (names.length === 2 ? 130 : 275) * doc.fontScale;
   // Keep Latin descenders inside the heading area, above the blue memo.

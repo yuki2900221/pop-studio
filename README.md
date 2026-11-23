@@ -21,7 +21,7 @@
 - Workers AIによる商品メモからの商品情報抽出。結果を確認してから編集内容へ反映。
 - 全画面スケルトン、画面・パネル・ダイアログのアニメーション、モーション軽減設定への対応。
 
-公開版はCloudflare Accessで保護しており、許可した店舗用のGoogleアカウントでログインした場合だけ開けます。許可するアカウントの追加・変更は、Cloudflareの「Zero Trust → Access controls → Policies」の「POP STUDIO - store account (Google)」で行います。ログインはGoogleのみで、セッションは24時間です。アプリ内のアカウント登録はありません。
+公開版はCloudflare Accessで保護しており、許可した店舗用のGoogleアカウントでログインした場合だけ開けます。許可するアカウントの追加・変更は、Cloudflareの「Zero Trust → Access controls → Policies」の「POP STUDIO - store account (Google)」で行います。ログインはGoogleのみで、ログインの有効期間は1週間です。期間を過ぎると次にページを開いたときにGoogleのアカウント選択画面が出ます。期間の変更は「Zero Trust → Access controls → Applications」の「pop-studio-yamadaya - Cloudflare Workers」の「Session Duration」で行います（Workerの「Access」画面からの保存は、ログイン方法をGoogleのみにしている設定と両立せずエラーになります）。アプリ内のアカウント登録はありません。
 
 下書き・印刷待ち・アップロード画像は、そのブラウザのlocalStorageに保存します。端末間同期や店舗間共有はありません。下書きのバックアップ・別端末への移動にはJSONを書き出してください。印刷待ち一覧のJSON一括書き出しは未対応です。ブラウザのデータ削除で下書き・印刷待ちも失われます。
 

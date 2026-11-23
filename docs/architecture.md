@@ -77,7 +77,7 @@ WindowsのEdge / Chrome
 
 - ログイン方法はGoogleのみ（Google Cloudプロジェクト`pop-studio-login`のOAuthクライアント）。One-time PINとCloudflareログインはアプリの選択肢から外し、ポリシーでも「Login Methods = Google」を必須にしています。
 - 許可は再利用ポリシー「POP STUDIO - store account (Google)」に登録した店舗用アカウントのみ。公開リポジトリにメールアドレスは記載しません。
-- 範囲は本番URLとプレビューURLの両方、セッションは24時間です。
+- 範囲は本番URLとプレビューURLの両方、セッションは1週間です（2026-11-23に24時間から変更。店舗PCで毎日ログインし直す手間を減らすため。全体のセッション設定は「アプリに従う」のまま）。
 - Workerは`ACCESS_REQUIRED=true`のとき、`/api/*`へのリクエストに付く`Cf-Access-Jwt-Assertion`を検証し、署名（チームのJWKS、RS256）、発行元（`ACCESS_TEAM_DOMAIN`）、AUD（`ACCESS_AUD`）、有効期限のいずれかが合わなければ401で拒否します。Accessの設定が外れても、AI APIが公開状態に戻らないようにするためです。Static Assetsを使うWorkerでは`ctx.access`が渡されないため、JWTを直接検証しています（追加ライブラリなし、WebCryptoのみ）。静的画面は`run_worker_first`の対象外なので、保護はAccess側だけが担います。
 
 Accessは利用者の識別だけを行い、下書きはこれまでどおり端末内に保存します。将来、共有・同期が必要になった場合は、Accessの利用者情報をサーバー側で検証し、店舗・利用者単位のアクセス制御を実装してからD1・R2などを追加します。

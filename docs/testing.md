@@ -1,5 +1,12 @@
 # 検証記録
 
+## ログイン有効期間を1週間に変更（2026-11-23）
+
+- 利用者の指示により、Cloudflare Accessのアプリ「pop-studio-yamadaya - Cloudflare Workers」のSession Durationを24時間から1週間に変更（Zero Trust → Access controls → Applications で保存。サインインは利用者本人）。
+- Workerの「Access」画面の「Edit Worker access」からの保存は、`allowed_idps must be provided and have only one identity provider for auto_redirect_to_identity`のエラーで失敗し、変更されなかった。Googleのみ・自動リダイレクトの設定と、この画面の保存処理が両立しないため。
+- 保存後、Workerの「Access」画面でSession durationが「7 days」と表示されること、Access全体のセッション設定が「Same as application session timeout」で上書きされていないことを確認。ポリシー側は「アプリと同じ」のまま。
+- 変更前に発行済みのログインは発行時の24時間で切れ、次回ログインから1週間になる。実際に1週間後まで維持されるかは未確認。
+
 ## 商品名の2行目の改行位置（2026-11-23）
 
 - 仮運用で「おかめ豆腐ツ／インパック」「サッポロ一番塩ラーメン・味／噌ラーメン…」のように、11文字以上の商品名が文字数のちょうど半分で割れていた。

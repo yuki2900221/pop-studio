@@ -2156,7 +2156,9 @@ p {
   .storage-card,
   .sidebar-footer > div,
   .sidebar-footer > svg,
-  .help-link,
+  .help-link {
+    display: none;
+  }
   .brand-mark {
     width: 34px;
     height: 34px;

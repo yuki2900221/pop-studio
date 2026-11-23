@@ -13,6 +13,7 @@ import {
   templates,
   validateDocument,
 } from "../src/lib/model";
+import { legacyTemplate, legacyTemplates } from "./legacy-templates";
 import { buildPrintHtml, escapeHtml, paperDimensions } from "../src/lib/print";
 
 describe("price and consumption tax", () => {
@@ -50,7 +51,7 @@ describe("document boundaries", () => {
       paper: "B5",
       orientation: "landscape",
     });
-    const oldDocument = { ...createDocument(templates[1]) };
+    const oldDocument = { ...createDocument(legacyTemplate("citrus-market")) };
     delete oldDocument.memo1;
     delete oldDocument.memo2;
     expect(validateDocument(oldDocument)).toBe(true);
@@ -58,8 +59,11 @@ describe("document boundaries", () => {
       loadDocuments({ getItem: () => JSON.stringify([oldDocument]) }),
     ).toEqual([oldDocument]);
   });
-  it("creates a valid independent document from each provided template", () => {
-    for (const template of templates)
+  it("offers only the store format for new POPs", () => {
+    expect(templates.map((template) => template.id)).toEqual(["store-sale"]);
+  });
+  it("creates a valid independent document from current and removed templates", () => {
+    for (const template of [...templates, ...legacyTemplates])
       expect(validateDocument(createDocument(template))).toBe(true);
     expect(createDocument().id).not.toBe(createDocument().id);
   });
@@ -261,16 +265,15 @@ describe("physical printing and HTML isolation", () => {
     expect(html).toContain("429");
   });
   it("omits tax text when disabled", () => {
-    const standard = createDocument(
-      templates.find((template) => template.id === "citrus-market")!,
-    );
+    const standard = createDocument(legacyTemplate("citrus-market"));
     expect(buildPrintHtml({ ...standard, showTax: false })).not.toContain(
       "税込 ",
     );
     expect(buildPrintHtml(standard)).toContain("税込 429円");
   });
   it("prints the same SVG used by the preview for every template, paper size and orientation", () => {
-    for (const template of templates) {
+    // Includes removed templates: their saved documents must still print.
+    for (const template of [...templates, ...legacyTemplates]) {
       for (const paper of ["A4", "A5", "shelf"] as const) {
         for (const orientation of ["landscape", "portrait"] as const) {
           const doc = { ...createDocument(template), paper, orientation };

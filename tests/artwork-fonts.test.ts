@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDocument, templates } from "../src/lib/model";
 import { printBatch, printDocument } from "../src/lib/print";
 import { SALE_FONT_FAMILY, PRICE_FONT_FAMILY } from "../src/lib/artwork-fonts";
+import { legacyTemplate } from "./legacy-templates";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -117,7 +118,7 @@ describe("store POP print font readiness", () => {
       },
     );
     const sale = createDocument(templates[0]);
-    const imageDoc = createDocument(templates[1]);
+    const imageDoc = createDocument(legacyTemplate("citrus-market"));
     expect(
       printBatch([
         { id: "sale", doc: sale, copies: 1 },
@@ -148,7 +149,11 @@ describe("store POP print font readiness", () => {
     expect(
       printBatch([
         { id: "sale", doc: createDocument(templates[0]), copies: 1 },
-        { id: "image", doc: createDocument(templates[1]), copies: 1 },
+        {
+          id: "image",
+          doc: createDocument(legacyTemplate("citrus-market")),
+          copies: 1,
+        },
       ]).ok,
     ).toBe(true);
     await vi.runAllTimersAsync();

@@ -23,7 +23,6 @@ import {
   Grid2X2,
   ImagePlus,
   LayoutTemplate,
-  Leaf,
   List,
   LoaderCircle,
   Maximize,
@@ -50,7 +49,6 @@ import PrintSheetPreview from "./components/PrintSheetPreview";
 import "./print-queue.css";
 import {
   templates,
-  categories,
   createDocument,
   loadDocuments,
   saveDocuments,
@@ -206,7 +204,6 @@ export default function App() {
   const focusProductRef = useRef(false);
   const [history, setHistory] = useState<PopDocument[]>([]),
     [future, setFuture] = useState<PopDocument[]>([]),
-    [category, setCategory] = useState("すべて"),
     [query, setQuery] = useState(""),
     [size, setSize] = useState<PopDocument["paper"]>(() => {
       try {
@@ -852,11 +849,7 @@ export default function App() {
     setModal(null);
     notify("確認した商品情報を反映しました");
   };
-  const filtered = templates.filter(
-    (t) =>
-      (category === "すべて" || t.category === category) &&
-      `${t.name} ${t.category} ${t.productName}`.includes(query),
-  );
+  const filtered = templates;
   const filteredDocs = docs.filter((d) =>
     `${d.name} ${d.productName} ${d.origin}`.includes(query),
   );
@@ -1083,26 +1076,26 @@ export default function App() {
                 </div>
               )}
               <div className="library-toolbar">
-                <div className="search-box">
-                  <Search size={18} />
-                  <input
-                    aria-label="テンプレートやPOPを検索"
-                    placeholder={
-                      view === "saved" ? "POPを検索" : "テンプレートを検索"
-                    }
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  {query && (
-                    <button
-                      aria-label="検索をクリア"
-                      onClick={() => setQuery("")}
-                    >
-                      <X size={15} />
-                    </button>
-                  )}
-                  <kbd>⌕</kbd>
-                </div>
+                {view === "saved" && (
+                  <div className="search-box">
+                    <Search size={18} />
+                    <input
+                      aria-label="POPを検索"
+                      placeholder="POPを検索"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                    {query && (
+                      <button
+                        aria-label="検索をクリア"
+                        onClick={() => setQuery("")}
+                      >
+                        <X size={15} />
+                      </button>
+                    )}
+                    <kbd>⌕</kbd>
+                  </div>
+                )}
                 <div className="library-controls">
                   {view === "templates" && (
                     <label className="size-select">
@@ -1133,32 +1126,9 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              {view === "templates" && (
-                <div
-                  className="category-row"
-                  role="group"
-                  aria-label="商品カテゴリ"
-                >
-                  {categories.map((c: string) => (
-                    <button
-                      key={c}
-                      className={`category-button ${category === c ? "active" : ""}`}
-                      onClick={() => setCategory(c)}
-                    >
-                      {c === "青果" && <Leaf size={14} />}
-                      <span>{c}</span>
-                      {c === "すべて" && <small>{templates.length}</small>}
-                    </button>
-                  ))}
-                </div>
-              )}
               <div className="section-heading">
                 <h2>
-                  {view === "saved"
-                    ? "すべてのPOP"
-                    : category === "すべて"
-                      ? "すべてのテンプレート"
-                      : `${category}のテンプレート`}
+                  {view === "saved" ? "すべてのPOP" : "すべてのテンプレート"}
                 </h2>
                 <span>
                   {view === "saved" ? filteredDocs.length : filtered.length} 件
@@ -1305,7 +1275,6 @@ export default function App() {
                     className="secondary-button"
                     onClick={() => {
                       setQuery("");
-                      setCategory("すべて");
                       if (view === "saved") leave("templates");
                     }}
                   >
